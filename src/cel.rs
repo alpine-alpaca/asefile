@@ -5,21 +5,21 @@ use std::io::{Cursor, Read};
 use std::fmt;
 
 #[derive(Debug)]
-pub struct Cel {
-    layer_index: u16,
-    x: i16,
-    y: i16,
-    opacity: u8,
-    data: CelData,
+pub(crate) struct Cel {
+    pub layer_index: u16,
+    pub x: i16,
+    pub y: i16,
+    pub opacity: u8,
+    pub data: CelData,
 }
 
-pub struct CelBytes(Vec<u8>);
+pub(crate) struct CelBytes(pub Vec<u8>);
 
 #[derive(Debug)]
-pub enum CelData {
+pub(crate) enum CelData {
     Raw { width: u16, height: u16, data: CelBytes },
     Linked(u16),
-    ZlibData { width: u16, height: u16, data: CelBytes },
+    // ZlibData { width: u16, height: u16, data: CelBytes },
 }
 
 impl fmt::Debug for CelBytes {

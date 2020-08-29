@@ -7,10 +7,14 @@ pub mod cel;
 pub mod color_profile;
 pub mod layer;
 pub mod palette;
+pub mod file;
+#[cfg(test)]
+mod tests;
 
 pub use color_profile::ColorProfile;
 pub use layer::Layers;
 pub use palette::ColorPalette;
+pub use file::{AsepriteFile, PixelFormat};
 
 // TODO: impl Error
 #[derive(Debug)]
@@ -33,36 +37,6 @@ impl From<FromUtf8Error> for AsepriteParseError {
 }
 
 type Result<T> = std::result::Result<T, AsepriteParseError>;
-
-pub struct AsepriteFile {
-    pub width: u16,
-    pub height: u16,
-    pub num_frames: u16,
-    pub pixel_format: PixelFormat,
-    pub transparent_color_index: u8, // only for PixelFormat::Indexed
-    pub palette: Option<ColorPalette>,
-    pub layers: Layers,
-    pub color_profile: Option<ColorProfile>,
-    pub frame_times: Vec<u16>,
-    framedata: Vec<Vec<cel::Cel>>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PixelFormat {
-    Rgba,
-    Grayscale,
-    Indexed,
-}
-
-impl PixelFormat {
-    pub fn bytes_per_pixel(&self) -> usize {
-        match self {
-            PixelFormat::Rgba => 4,
-            PixelFormat::Grayscale => 2,
-            PixelFormat::Indexed => 1,
-        }
-    }
-}
 
 struct ParseInfo {
     palette: Option<palette::ColorPalette>,
@@ -317,33 +291,3 @@ fn parse_pixel_format(color_depth: u16) -> Result<PixelFormat> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::fs::File;
-    use std::io::BufReader;
-    use std::path::Path;
-    #[test]
-    fn basic_1() {
-        let file = File::open(Path::new("tests/data/basic-16x16.aseprite")).unwrap();
-        let reader = BufReader::new(file);
-        let _f = read_aseprite(reader).unwrap();
-        assert!(false);
-    }
-
-    #[test]
-    fn basic_2() {
-        let file = File::open(Path::new("tests/data/layers_and_tags.aseprite")).unwrap();
-        let reader = BufReader::new(file);
-        let _f = read_aseprite(reader).unwrap();
-        assert!(false);
-    }
-
-    #[test]
-    fn basic_3() {
-        let file = File::open(Path::new("tests/data/big.aseprite")).unwrap();
-        let reader = BufReader::new(file);
-        let _f = read_aseprite(reader).unwrap();
-        assert!(false);
-    }
-}

@@ -35,6 +35,7 @@ impl Layers {
     }
 
     pub fn parent(&self, id: usize) -> Option<usize> {
+        // TODO: We could precompute all of this.
         let my_child_level = self.layer(id).child_level;
         if my_child_level == 0 {
             return None;
@@ -45,6 +46,18 @@ impl Layers {
             parent_candidate -= 1;
         }
         Some(parent_candidate)
+    }
+
+    /// Check if layer is visible, taking into account parent visibility.
+    pub fn is_visible(&self, id: usize) -> bool {
+        // TODO: This could also be precomputed.
+        let layer_is_visible = self.layer(id).flags.is_visible();
+        let parent_is_visible = if let Some(parent) = self.parent(id) {
+            self.is_visible(parent)
+        } else {
+            true
+        };
+        layer_is_visible && parent_is_visible
     }
 }
 
