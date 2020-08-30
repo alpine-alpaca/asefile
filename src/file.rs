@@ -1,5 +1,5 @@
 use crate::*;
-use cel::{Cel, CelBytes, CelData};
+use cel::{Cel, CelData};
 use image::RgbaImage;
 
 pub struct AsepriteFile {
@@ -69,39 +69,45 @@ impl AsepriteFile {
             }
             println!("====> Cel: {:?}", cel);
             assert!(cel.opacity == 255, "NYI: different Cel opacities");
+            assert!(self.pixel_format == PixelFormat::Rgba);
             match &cel.data {
-                CelData::Linked(frame) => assert!(false, "NYI: Linked Cels"),
+                CelData::Linked(frame) => {
+                    //assert!(false, "NYI: Linked Cels"),
+                    for cel in self.frame_cels(*frame, cel.layer_index) {
+                        match &cel.data {
+                            CelData::Linked(_) => {
+                                assert!(false, "Linked cel points to another linked cel");
+                            }
+                            CelData::Raw {
+                                width,
+                                height,
+                                data,
+                            } => {
+                                copy_cel_to_image(
+                                    &mut image,
+                                    cel.x as i32,
+                                    cel.y as i32,
+                                    *width as i32,
+                                    *height as i32,
+                                    &data.0,
+                                );
+                            }
+                        }
+                    }
+                }
                 CelData::Raw {
                     width,
                     height,
                     data,
                 } => {
-                    let x0 = cel.x as i32;
-                    let y0 = cel.y as i32;
-                    let x_end = x0 + *width as i32;
-                    let y_end = y0 + *height as i32;
-                    assert!(x0 >= 0 && y0 >= 0);
-                    assert!(x_end <= self.width as i32);
-                    assert!(y_end <= self.height as i32);
-                    println!(
-                        "======> Writing cel: x:{}..{}, y:{}..{}",
-                        x0, x_end, y0, y_end
+                    copy_cel_to_image(
+                        &mut image,
+                        cel.x as i32,
+                        cel.y as i32,
+                        *width as i32,
+                        *height as i32,
+                        &data.0,
                     );
-                    for y in y0..y_end {
-                        for x in x0..x_end {
-                            let src = 4 * ((y - y0) as usize * *width as usize + (x - x0) as usize);
-                            let alpha = data.0[src + 3];
-                            if alpha == 0 {
-                                continue;
-                            };
-                            assert!(alpha == 255);
-                            image.put_pixel(
-                                x as u32,
-                                y as u32,
-                                image::Rgba([data.0[src], data.0[src + 1], data.0[src + 2], alpha]),
-                            )
-                        }
-                    }
                 }
             }
         }
@@ -109,7 +115,52 @@ impl AsepriteFile {
         image
     }
 
-    // fn frame_cels(&self, frame: usize, layer: usize) -> Vec<Cel> {
+    fn frame_cels(&self, frame: u16, layer: u16) -> Vec<&Cel> {
+        self.framedata[frame as usize]
+            .iter()
+            .filter(|c| c.layer_index == layer)
+            .collect()
+    }
+}
 
-    // }
+fn copy_cel_to_image(
+    image: &mut RgbaImage,
+    x0: i32,
+    y0: i32,
+    width: i32,
+    height: i32,
+    rgba_data: &[u8],
+) {
+    // TODO: Try using image::imageops::overlay. That should automatically
+    // handle pixel alpha
+    let x_end = x0 + width;
+    let y_end = y0 + height;
+    assert!(x0 >= 0 && y0 >= 0);
+    let (img_width, img_height) = image.dimensions();
+    assert!(x_end <= img_width as i32);
+    assert!(y_end <= img_height as i32);
+    println!(
+        "======> Writing cel: x:{}..{}, y:{}..{}",
+        x0, x_end, y0, y_end
+    );
+    for y in y0..y_end {
+        for x in x0..x_end {
+            let src = 4 * ((y - y0) as usize * width as usize + (x - x0) as usize);
+            let alpha = rgba_data[src + 3];
+            if alpha == 0 {
+                continue;
+            };
+            assert!(alpha == 255);
+            image.put_pixel(
+                x as u32,
+                y as u32,
+                image::Rgba([
+                    rgba_data[src],
+                    rgba_data[src + 1],
+                    rgba_data[src + 2],
+                    alpha,
+                ]),
+            )
+        }
+    }
 }

@@ -2,7 +2,18 @@ use crate::*;
 use image;
 use std::fs::File;
 use std::io::BufReader;
-use std::path::{PathBuf, Path};
+use std::path::PathBuf;
+
+fn load_test_file(name: &str) -> AsepriteFile {
+    let mut path = PathBuf::new();
+    path.push("tests");
+    path.push("data");
+    path.push(format!("{}.aseprite", name));
+    println!("Loading file: {}", path.display());
+    let file = File::open(&path).unwrap();
+    let reader = BufReader::new(file);
+    read_aseprite(reader).unwrap()
+}
 
 fn compare_with_reference_image(img: image::RgbaImage, filename: &str) {
     let mut reference_path = PathBuf::new();
@@ -32,9 +43,7 @@ fn compare_with_reference_image(img: image::RgbaImage, filename: &str) {
 
 #[test]
 fn basic_1() {
-    let file = File::open(Path::new("tests/data/basic-16x16.aseprite")).unwrap();
-    let reader = BufReader::new(file);
-    let f = read_aseprite(reader).unwrap();
+    let f = load_test_file("basic-16x16");
     assert_eq!(f.num_frames, 1);
     assert_eq!((f.width, f.height), (16, 16));
     assert_eq!(f.layers.num_layers(), 1);
@@ -46,11 +55,14 @@ fn basic_1() {
 
 #[test]
 fn basic_2() {
-    let file = File::open(Path::new("tests/data/layers_and_tags.aseprite")).unwrap();
-    let reader = BufReader::new(file);
-    let f = read_aseprite(reader).unwrap();
+    let f = load_test_file("layers_and_tags");
 
-    //compare_with_reference_image(f.frame_image(0), "layers_and_tags_01");
+    assert_eq!(f.num_frames, 4);
+    assert_eq!((f.width, f.height), (16, 16));
+    assert_eq!(f.layers.num_layers(), 6);
+    assert_eq!(f.pixel_format, PixelFormat::Rgba);
+
+    compare_with_reference_image(f.frame_image(0), "layers_and_tags_01");
     compare_with_reference_image(f.frame_image(1), "layers_and_tags_02");
     compare_with_reference_image(f.frame_image(2), "layers_and_tags_03");
     compare_with_reference_image(f.frame_image(3), "layers_and_tags_04");
@@ -58,8 +70,12 @@ fn basic_2() {
 
 #[test]
 fn basic_3() {
-    let file = File::open(Path::new("tests/data/big.aseprite")).unwrap();
-    let reader = BufReader::new(file);
-    let _f = read_aseprite(reader).unwrap();
-    assert!(false);
+    let f = load_test_file("big");
+
+    assert_eq!(f.num_frames, 1);
+    assert_eq!((f.width, f.height), (256, 256));
+    assert_eq!(f.layers.num_layers(), 1);
+    assert_eq!(f.pixel_format, PixelFormat::Rgba);
+
+    compare_with_reference_image(f.frame_image(0), "big");
 }
