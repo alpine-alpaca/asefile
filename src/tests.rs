@@ -42,7 +42,7 @@ fn compare_with_reference_image(img: image::RgbaImage, filename: &str) {
 }
 
 #[test]
-fn basic_1() {
+fn basic() {
     let f = load_test_file("basic-16x16");
     assert_eq!(f.num_frames, 1);
     assert_eq!((f.width, f.height), (16, 16));
@@ -54,7 +54,7 @@ fn basic_1() {
 }
 
 #[test]
-fn basic_2() {
+fn layers_and_tags() {
     let f = load_test_file("layers_and_tags");
 
     assert_eq!(f.num_frames, 4);
@@ -69,7 +69,7 @@ fn basic_2() {
 }
 
 #[test]
-fn basic_3() {
+fn big() {
     let f = load_test_file("big");
 
     assert_eq!(f.num_frames, 1);
@@ -78,4 +78,17 @@ fn basic_3() {
     assert_eq!(f.pixel_format, PixelFormat::Rgba);
 
     compare_with_reference_image(f.frame_image(0), "big");
+}
+
+#[test]
+fn transparency() {
+    let f = load_test_file("transparency");
+
+    assert_eq!(f.num_frames, 2);
+    assert_eq!((f.width, f.height), (16, 16));
+    assert_eq!(f.layers.num_layers(), 2);
+    assert_eq!(f.pixel_format, PixelFormat::Rgba);
+
+    compare_with_reference_image(f.frame_image(0), "transparency_01");
+    compare_with_reference_image(f.frame_image(1), "transparency_02");
 }

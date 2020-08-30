@@ -1,6 +1,7 @@
 use crate::*;
 use cel::{Cel, CelData};
-use image::RgbaImage;
+use image::{Pixel, RgbaImage, Rgba};
+use crate::blend;
 
 pub struct AsepriteFile {
     pub width: u16,
@@ -68,7 +69,7 @@ impl AsepriteFile {
                 continue;
             }
             println!("====> Cel: {:?}", cel);
-            assert!(cel.opacity == 255, "NYI: different Cel opacities");
+            //assert!(cel.opacity == 255, "NYI: different Cel opacities");
             assert!(self.pixel_format == PixelFormat::Rgba);
             match &cel.data {
                 CelData::Linked(frame) => {
@@ -89,6 +90,7 @@ impl AsepriteFile {
                                     cel.y as i32,
                                     *width as i32,
                                     *height as i32,
+                                    cel.opacity,
                                     &data.0,
                                 );
                             }
@@ -106,12 +108,14 @@ impl AsepriteFile {
                         cel.y as i32,
                         *width as i32,
                         *height as i32,
+                        cel.opacity,
                         &data.0,
                     );
                 }
             }
         }
 
+        //into_rgba8_image(image)
         image
     }
 
@@ -129,6 +133,7 @@ fn copy_cel_to_image(
     y0: i32,
     width: i32,
     height: i32,
+    opacity: u8,
     rgba_data: &[u8],
 ) {
     // TODO: Try using image::imageops::overlay. That should automatically
@@ -143,24 +148,43 @@ fn copy_cel_to_image(
         "======> Writing cel: x:{}..{}, y:{}..{}",
         x0, x_end, y0, y_end
     );
+
     for y in y0..y_end {
         for x in x0..x_end {
             let src = 4 * ((y - y0) as usize * width as usize + (x - x0) as usize);
-            let alpha = rgba_data[src + 3];
-            if alpha == 0 {
-                continue;
-            };
-            assert!(alpha == 255);
-            image.put_pixel(
-                x as u32,
-                y as u32,
-                image::Rgba([
-                    rgba_data[src],
-                    rgba_data[src + 1],
-                    rgba_data[src + 2],
-                    alpha,
-                ]),
-            )
+
+            //let orig_alpha = rgba_data[src + 3];
+            //let alpha = (orig_alpha as u16 * opacity as u16 / 255) as u8;
+
+            let pixel = Rgba::from_channels(
+                rgba_data[src],
+                rgba_data[src + 1],
+                rgba_data[src + 2],
+                rgba_data[src + 3],
+            );
+
+            // let pixel = rgba16_pixel(
+            //     rgba_data[src],
+            //     rgba_data[src + 1],
+            //     rgba_data[src + 2],
+            //     alpha,
+            // );
+
+            let src = image.get_pixel(x as u32, y as u32).clone();
+            //image.get_pixel_mut(x as u32, y as u32).blend(&pixel);
+            let new = blend::normal(src, pixel, opacity);
+            image.put_pixel(x as u32, y as u32, new);
+
+            let new = image.get_pixel(x as u32, y as u32);
+            if x == 5 && y == 8 {
+                println!(
+                    "**** src={:?},\n   pixel={:?}, opacity={},\n     new={:?}",
+                    src,
+                    pixel,
+                    opacity,
+                    new
+                );
+            }
         }
     }
 }

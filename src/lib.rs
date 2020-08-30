@@ -8,6 +8,8 @@ pub mod color_profile;
 pub mod layer;
 pub mod palette;
 pub mod file;
+pub mod rgba16;
+pub mod blend;
 #[cfg(test)]
 mod tests;
 

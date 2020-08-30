@@ -2,3 +2,5 @@
 Cargo.lock
 .vscode/
 tests/data/*.actual.png
+ref/*.exe
+ref/a.out
