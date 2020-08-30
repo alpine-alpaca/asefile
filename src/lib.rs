@@ -1,3 +1,4 @@
+#![warn(clippy::all)]
 use byteorder::{LittleEndian, ReadBytesExt};
 //use log::debug;
 use std::io::{self, Read};
@@ -86,13 +87,13 @@ pub fn read_aseprite<R: Read>(mut input: R) -> Result<AsepriteFile> {
     input.read_exact(&mut rest)?;
 
     if !(pixel_width == 1 && pixel_height == 1) {
-        return Err(AsepriteParseError::UnsupportedFeature(format!(
-            "Only pixel width:height ratio of 1:1 supported"
-        )));
+        return Err(AsepriteParseError::UnsupportedFeature(
+            "Only pixel width:height ratio of 1:1 supported".to_owned()
+        ));
     }
 
     let mut framedata = Vec::with_capacity(num_frames as usize);
-    framedata.resize_with(num_frames as usize, || Vec::new());
+    framedata.resize_with(num_frames as usize, Vec::new);
     let mut parse_info = ParseInfo {
         palette: None,
         color_profile: None,

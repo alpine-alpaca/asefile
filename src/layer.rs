@@ -130,7 +130,7 @@ impl fmt::Debug for LayerFlags {
     }
 }
 
-static FLAG_NAMES: [&'static str; 7] = [
+static FLAG_NAMES: [&str; 7] = [
     "Visible",
     "Editable",
     "LockMovement",

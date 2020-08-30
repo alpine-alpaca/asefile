@@ -117,7 +117,7 @@ fn dump_bytes(data: &[u8]) {
         column += 1;
         if column >= 16 {
             column = 0;
-            println!("");
+            println!();
         }
     }
 }

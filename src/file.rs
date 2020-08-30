@@ -77,7 +77,7 @@ impl AsepriteFile {
                     for cel in self.frame_cels(*frame, cel.layer_index) {
                         match &cel.data {
                             CelData::Linked(_) => {
-                                assert!(false, "Linked cel points to another linked cel");
+                                panic!("Linked cel points to another linked cel");
                             }
                             CelData::Raw {
                                 width,
@@ -170,7 +170,7 @@ fn copy_cel_to_image(
             //     alpha,
             // );
 
-            let src = image.get_pixel(x as u32, y as u32).clone();
+            let src = *image.get_pixel(x as u32, y as u32);
             //image.get_pixel_mut(x as u32, y as u32).blend(&pixel);
             let new = blend::normal(src, pixel, opacity);
             image.put_pixel(x as u32, y as u32, new);

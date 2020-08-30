@@ -33,7 +33,7 @@ pub fn rgba16_as_fpixel(p: Rgba16) -> Rgba<f32> {
 }
 
 fn u16_to_f32(x: u16) -> f32 {
-    (x as f32) / (65535 as f32)
+    (x as f32) / 65535.0
 }
 
 #[inline]
@@ -67,6 +67,7 @@ fn downscaling() {
         buckets[d as usize] += 1;
     }
     assert_eq!(buckets[0], buckets[255]);
+    #[allow(clippy::needless_range_loop)]
     for i in 1..=254 {
         assert_eq!(buckets[i], 257);
     }

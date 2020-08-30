@@ -1,5 +1,4 @@
 use crate::*;
-use image;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
@@ -39,7 +38,7 @@ fn compare_with_reference_image(img: image::RgbaImage, filename: &str) {
                 expected_color,
                 actual_color
             );
-            assert!(false, "Found pixel difference");
+            panic!("Found pixel difference");
         }
     }
 }
