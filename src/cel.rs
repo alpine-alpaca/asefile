@@ -47,7 +47,6 @@ pub(crate) fn parse_cel_chunk(data: &[u8], pixel_format: PixelFormat) -> Result<
         0 => {
             let width = input.read_u16::<LittleEndian>()?;
             let height = input.read_u16::<LittleEndian>()?;
-            //println!("Raw data: {}x{}", width, height);
             let data_size = width as usize * height as usize * pixel_format.bytes_per_pixel();
             let mut output = Vec::with_capacity(data_size);
             input.take(data_size as u64).read_to_end(&mut output)?;
@@ -71,16 +70,9 @@ pub(crate) fn parse_cel_chunk(data: &[u8], pixel_format: PixelFormat) -> Result<
         2 => {
             let width = input.read_u16::<LittleEndian>()?;
             let height = input.read_u16::<LittleEndian>()?;
-            //let bytes_left = data.len() as u64 - input.position();
-            //println!("Gzipped data: {}x{}, bytes:{}", width, height, bytes_left);
-            //let d = &data[input.position() as usize..];
-            //dump_bytes(d);
             let expected_output_size =
                 width as usize * height as usize * pixel_format.bytes_per_pixel();
-            //println!("Expected output: {}", expected_output_size);
             let decoded_data = unzip(input, expected_output_size)?;
-            //println!("Gzipped bytes: {}", decoded_data.len());
-            //dump_bytes(&decoded_data);
             CelData::Raw {
                 width,
                 height,
@@ -103,10 +95,6 @@ pub(crate) fn parse_cel_chunk(data: &[u8], pixel_format: PixelFormat) -> Result<
         data: cel_data,
     })
 }
-
-// fn read_raw_cell(input: Cursor<&[u8]>, pixel_format: PixelFormat) -> CelType {
-
-// }
 
 // Useful when debugging
 #[allow(dead_code)]

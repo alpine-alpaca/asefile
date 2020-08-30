@@ -3,6 +3,7 @@ use image::Rgba;
 
 pub type Color8 = Rgba<u8>;
 
+#[allow(dead_code)]
 pub(crate) fn merge(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
     let [back_r, back_g, back_b, back_a] = backdrop.0;
     let [src_r, src_g, src_b, src_a] = src.0;

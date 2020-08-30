@@ -14,6 +14,7 @@ pub struct Layer {
     pub flags: LayerFlags,
     pub name: String,
     pub blend_mode: BlendMode,
+    pub opacity: u8,
     pub layer_type: LayerType,
     child_level: u16,
 }
@@ -159,15 +160,16 @@ pub(crate) fn parse_layer_chunk(data: &[u8]) -> Result<Layer> {
     let layer_type = parse_layer_type(layer_type)?;
     let blend_mode = parse_blend_mode(blend_mode)?;
 
-    println!(
-        "Layer {}: flags={:?} type={:?} blend_mode={:?}, opacity={}",
-        name, flags, layer_type, blend_mode, opacity
-    );
+    // println!(
+    //     "Layer {}: flags={:?} type={:?} blend_mode={:?}, opacity={}",
+    //     name, flags, layer_type, blend_mode, opacity
+    // );
 
     Ok(Layer {
         name,
         flags,
         blend_mode,
+        opacity,
         layer_type,
         child_level,
     })

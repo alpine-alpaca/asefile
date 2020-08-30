@@ -31,7 +31,7 @@ fn compare_with_reference_image(img: image::RgbaImage, filename: &str) {
         let actual_color = img.get_pixel(x, y);
         if actual_color != expected_color {
             println!(
-                "Pixel difference in {}: {},{} expected: {:?} actual: {:?}",
+                "Pixel difference in {}:\nlocation: {},{}\nexpected: {:?}\n  actual: {:?}",
                 actual_path.display(),
                 x,
                 y,
@@ -63,6 +63,7 @@ fn layers_and_tags() {
     assert_eq!((f.width, f.height), (16, 16));
     assert_eq!(f.layers.num_layers(), 6);
     assert_eq!(f.pixel_format, PixelFormat::Rgba);
+    assert_eq!(f.tags.len(), 3);
 
     compare_with_reference_image(f.frame_image(0), "layers_and_tags_01");
     compare_with_reference_image(f.frame_image(1), "layers_and_tags_02");
@@ -94,3 +95,51 @@ fn transparency() {
     compare_with_reference_image(f.frame_image(0), "transparency_01");
     compare_with_reference_image(f.frame_image(1), "transparency_02");
 }
+
+#[test]
+fn background() {
+    let f = load_test_file("background");
+
+    assert_eq!(f.num_frames, 1);
+    assert_eq!((f.width, f.height), (256, 256));
+    assert_eq!(f.layers.num_layers(), 1);
+    assert_eq!(f.pixel_format, PixelFormat::Rgba);
+    println!("{:#?}", f.layers);
+
+    compare_with_reference_image(f.frame_image(0), "background");
+}
+
+#[test]
+fn blend_normal() {
+    let f = load_test_file("blend_normal");
+
+    assert_eq!(f.num_frames, 1);
+    assert_eq!((f.width, f.height), (256, 256));
+    assert_eq!(f.layers.num_layers(), 2);
+    assert_eq!(f.pixel_format, PixelFormat::Rgba);
+
+    compare_with_reference_image(f.frame_image(0), "blend_normal");
+}
+
+/*
+#[test]
+fn gen_random_pixels() {
+    use rand::Rng;
+    use image::{Rgba};
+    use std::path::Path;
+    let mut rng = rand::thread_rng();
+
+    let (width, height) = (256, 256);
+    let mut img = image::RgbaImage::new(width, height);
+    for y in 0..width {
+        for x in 0..height {
+            let r: u8 = rng.gen();
+            let g: u8 = rng.gen();
+            let b: u8 = rng.gen();
+            let a: u8 = rng.gen();
+            img.put_pixel(x, y, Rgba([r, g, b, a]));
+        }
+    }
+    img.save(&Path::new("tests/data/random-256x256.png")).unwrap();
+}
+// */

@@ -20,7 +20,7 @@ pub struct ColorPaletteEntry {
 pub(crate) fn parse_palette_chunk(data: &[u8]) -> Result<ColorPalette> {
     let mut input = Cursor::new(data);
 
-    let num_total_entries = input.read_u32::<LittleEndian>()?;
+    let _num_total_entries = input.read_u32::<LittleEndian>()?;
     let first_color_index = input.read_u32::<LittleEndian>()?;
     let last_color_index = input.read_u32::<LittleEndian>()?;
     let _reserved = input.read_u64::<LittleEndian>()?;
@@ -33,7 +33,6 @@ pub(crate) fn parse_palette_chunk(data: &[u8]) -> Result<ColorPalette> {
     }
 
     let count = last_color_index - first_color_index + 1;
-    println!("Count: total={}, diff={}", num_total_entries, count);
     let mut entries = Vec::with_capacity(count as usize);
     for id in 0..count {
         let flags = input.read_u16::<LittleEndian>()?;
@@ -56,12 +55,6 @@ pub(crate) fn parse_palette_chunk(data: &[u8]) -> Result<ColorPalette> {
             name,
         })
     }
-
-    println!(
-        "Palette bytes: {}, cursor pos: {}",
-        data.len(),
-        input.position()
-    );
 
     Ok(ColorPalette { entries })
 }

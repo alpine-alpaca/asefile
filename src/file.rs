@@ -13,6 +13,7 @@ pub struct AsepriteFile {
     pub layers: Layers,
     pub color_profile: Option<ColorProfile>,
     pub frame_times: Vec<u16>,
+    pub tags: Vec<Tag>,
     pub(crate) framedata: Vec<Vec<cel::Cel>>,
 }
 
@@ -65,10 +66,10 @@ impl AsepriteFile {
         for cel in &self.framedata[frame as usize] {
             // TODO: This must be done in layer order (pre-sort Cels?)
             if !self.layers.is_visible(cel.layer_index as usize) {
-                println!("===> skipping invisible Cel: {:?}", cel);
+                // println!("===> skipping invisible Cel: {:?}", cel);
                 continue;
             }
-            println!("====> Cel: {:?}", cel);
+            // println!("====> Cel: {:?}", cel);
             //assert!(cel.opacity == 255, "NYI: different Cel opacities");
             assert!(self.pixel_format == PixelFormat::Rgba);
             match &cel.data {
@@ -136,25 +137,20 @@ fn copy_cel_to_image(
     opacity: u8,
     rgba_data: &[u8],
 ) {
-    // TODO: Try using image::imageops::overlay. That should automatically
-    // handle pixel alpha
     let x_end = x0 + width;
     let y_end = y0 + height;
     assert!(x0 >= 0 && y0 >= 0);
     let (img_width, img_height) = image.dimensions();
     assert!(x_end <= img_width as i32);
     assert!(y_end <= img_height as i32);
-    println!(
-        "======> Writing cel: x:{}..{}, y:{}..{}",
-        x0, x_end, y0, y_end
-    );
+    // println!(
+    //     "======> Writing cel: x:{}..{}, y:{}..{}",
+    //     x0, x_end, y0, y_end
+    // );
 
     for y in y0..y_end {
         for x in x0..x_end {
             let src = 4 * ((y - y0) as usize * width as usize + (x - x0) as usize);
-
-            //let orig_alpha = rgba_data[src + 3];
-            //let alpha = (orig_alpha as u16 * opacity as u16 / 255) as u8;
 
             let pixel = Rgba::from_channels(
                 rgba_data[src],
@@ -163,25 +159,17 @@ fn copy_cel_to_image(
                 rgba_data[src + 3],
             );
 
-            // let pixel = rgba16_pixel(
-            //     rgba_data[src],
-            //     rgba_data[src + 1],
-            //     rgba_data[src + 2],
-            //     alpha,
-            // );
-
             let src = *image.get_pixel(x as u32, y as u32);
-            //image.get_pixel_mut(x as u32, y as u32).blend(&pixel);
             let new = blend::normal(src, pixel, opacity);
             image.put_pixel(x as u32, y as u32, new);
 
-            let new = image.get_pixel(x as u32, y as u32);
-            if x == 5 && y == 8 {
-                println!(
-                    "**** src={:?},\n   pixel={:?}, opacity={},\n     new={:?}",
-                    src, pixel, opacity, new
-                );
-            }
+            // let new = image.get_pixel(x as u32, y as u32);
+            // if x == 5 && y == 8 {
+            //     println!(
+            //         "**** src={:?},\n   pixel={:?}, opacity={},\n     new={:?}",
+            //         src, pixel, opacity, new
+            //     );
+            // }
         }
     }
 }
