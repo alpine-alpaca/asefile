@@ -1,7 +1,7 @@
+use crate::blend;
 use crate::*;
 use cel::{Cel, CelData};
-use image::{Pixel, RgbaImage, Rgba};
-use crate::blend;
+use image::{Pixel, Rgba, RgbaImage};
 
 pub struct AsepriteFile {
     pub width: u16,
@@ -179,10 +179,7 @@ fn copy_cel_to_image(
             if x == 5 && y == 8 {
                 println!(
                     "**** src={:?},\n   pixel={:?}, opacity={},\n     new={:?}",
-                    src,
-                    pixel,
-                    opacity,
-                    new
+                    src, pixel, opacity, new
                 );
             }
         }

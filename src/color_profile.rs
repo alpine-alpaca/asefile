@@ -34,8 +34,8 @@ pub(crate) fn parse_color_profile(data: &[u8]) -> Result<ColorProfile> {
 
     if profile_type == ColorProfileType::ICC {
         return Err(AsepriteParseError::UnsupportedFeature(
-            "Embedded ICC color profiles are currently not supported".to_owned()
-        ))
+            "Embedded ICC color profiles are currently not supported".to_owned(),
+        ));
     }
 
     Ok(ColorProfile {

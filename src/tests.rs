@@ -34,7 +34,10 @@ fn compare_with_reference_image(img: image::RgbaImage, filename: &str) {
             println!(
                 "Pixel difference in {}: {},{} expected: {:?} actual: {:?}",
                 actual_path.display(),
-                x, y, expected_color, actual_color
+                x,
+                y,
+                expected_color,
+                actual_color
             );
             assert!(false, "Found pixel difference");
         }

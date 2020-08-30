@@ -1,6 +1,6 @@
-use crate::{AsepriteParseError, Result, read_string};
+use crate::{read_string, AsepriteParseError, Result};
 use byteorder::{LittleEndian, ReadBytesExt};
-use std::io::{Cursor};
+use std::io::Cursor;
 
 #[derive(Debug)]
 pub struct ColorPalette {
@@ -57,7 +57,11 @@ pub(crate) fn parse_palette_chunk(data: &[u8]) -> Result<ColorPalette> {
         })
     }
 
-    println!("Palette bytes: {}, cursor pos: {}", data.len(), input.position());
+    println!(
+        "Palette bytes: {}, cursor pos: {}",
+        data.len(),
+        input.position()
+    );
 
     Ok(ColorPalette { entries })
 }

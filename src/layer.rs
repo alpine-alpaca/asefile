@@ -22,7 +22,7 @@ pub struct Layer {
 pub struct Layers {
     // Sorted back to front (or bottom to top in the GUI, but groups occur
     // before their children, i.e., lower index)
-    layers: Vec<Layer>
+    layers: Vec<Layer>,
 }
 
 impl Layers {
@@ -164,7 +164,13 @@ pub(crate) fn parse_layer_chunk(data: &[u8]) -> Result<Layer> {
         name, flags, layer_type, blend_mode, opacity
     );
 
-    Ok(Layer { name, flags, blend_mode, layer_type, child_level })
+    Ok(Layer {
+        name,
+        flags,
+        blend_mode,
+        layer_type,
+        child_level,
+    })
 }
 
 fn parse_layer_type(id: u16) -> Result<LayerType> {
@@ -208,7 +214,5 @@ fn parse_blend_mode(id: u16) -> Result<BlendMode> {
 
 pub(crate) fn collect_layers(layers: Vec<Layer>) -> Result<Layers> {
     // TODO: Validate some properties
-    Ok(Layers {
-        layers
-    })
+    Ok(Layers { layers })
 }

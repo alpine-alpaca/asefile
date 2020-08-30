@@ -3,20 +3,20 @@ use byteorder::{LittleEndian, ReadBytesExt};
 use std::io::{self, Read};
 use std::string::FromUtf8Error;
 
+pub mod blend;
 pub mod cel;
 pub mod color_profile;
+pub mod file;
 pub mod layer;
 pub mod palette;
-pub mod file;
 pub mod rgba16;
-pub mod blend;
 #[cfg(test)]
 mod tests;
 
 pub use color_profile::ColorProfile;
+pub use file::{AsepriteFile, PixelFormat};
 pub use layer::Layers;
 pub use palette::ColorPalette;
-pub use file::{AsepriteFile, PixelFormat};
 
 // TODO: impl Error
 #[derive(Debug)]
@@ -292,4 +292,3 @@ fn parse_pixel_format(color_depth: u16) -> Result<PixelFormat> {
         ))),
     }
 }
-

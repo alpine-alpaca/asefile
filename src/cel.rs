@@ -1,8 +1,8 @@
 use crate::{AsepriteParseError, PixelFormat, Result};
 use byteorder::{LittleEndian, ReadBytesExt};
 use flate2::read::ZlibDecoder;
-use std::io::{Cursor, Read};
 use std::fmt;
+use std::io::{Cursor, Read};
 
 #[derive(Debug)]
 pub(crate) struct Cel {
@@ -17,7 +17,11 @@ pub(crate) struct CelBytes(pub Vec<u8>);
 
 #[derive(Debug)]
 pub(crate) enum CelData {
-    Raw { width: u16, height: u16, data: CelBytes },
+    Raw {
+        width: u16,
+        height: u16,
+        data: CelBytes,
+    },
     Linked(u16),
     // ZlibData { width: u16, height: u16, data: CelBytes },
 }
@@ -27,7 +31,6 @@ impl fmt::Debug for CelBytes {
         write!(f, "<{} bytes>", self.0.len())
     }
 }
-
 
 pub(crate) fn parse_cel_chunk(data: &[u8], pixel_format: PixelFormat) -> Result<Cel> {
     let mut input = Cursor::new(data);
@@ -50,12 +53,15 @@ pub(crate) fn parse_cel_chunk(data: &[u8], pixel_format: PixelFormat) -> Result<
             input.take(data_size as u64).read_to_end(&mut output)?;
             if output.len() != data_size {
                 return Err(AsepriteParseError::InvalidInput(format!(
-                    "Invalid cel data size. Expected: {}, Actual: {}", data_size, output.len()
+                    "Invalid cel data size. Expected: {}, Actual: {}",
+                    data_size,
+                    output.len()
                 )));
             }
             CelData::Raw {
-                width, height,
-                data: CelBytes(output)
+                width,
+                height,
+                data: CelBytes(output),
             }
         }
         1 => {
@@ -76,8 +82,9 @@ pub(crate) fn parse_cel_chunk(data: &[u8], pixel_format: PixelFormat) -> Result<
             //println!("Gzipped bytes: {}", decoded_data.len());
             //dump_bytes(&decoded_data);
             CelData::Raw {
-                width, height,
-                data: CelBytes(decoded_data)
+                width,
+                height,
+                data: CelBytes(decoded_data),
             }
         }
         _ => {
@@ -93,7 +100,7 @@ pub(crate) fn parse_cel_chunk(data: &[u8], pixel_format: PixelFormat) -> Result<
         x,
         y,
         opacity,
-        data: cel_data
+        data: cel_data,
     })
 }
 
