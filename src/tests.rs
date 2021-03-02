@@ -1,6 +1,4 @@
 use crate::*;
-use std::fs::File;
-use std::io::BufReader;
 use std::path::PathBuf;
 
 fn load_test_file(name: &str) -> AsepriteFile {
@@ -9,9 +7,10 @@ fn load_test_file(name: &str) -> AsepriteFile {
     path.push("data");
     path.push(format!("{}.aseprite", name));
     println!("Loading file: {}", path.display());
-    let file = File::open(&path).unwrap();
-    let reader = BufReader::new(file);
-    read_aseprite(reader).unwrap()
+    AsepriteFile::read_file(&path).unwrap()
+    // let file = File::open(&path).unwrap();
+    // let reader = BufReader::new(file);
+    // parse::read_aseprite(reader).unwrap()
 }
 
 fn compare_with_reference_image(img: image::RgbaImage, filename: &str) {
@@ -52,7 +51,7 @@ fn basic() {
     assert_eq!(f.pixel_format, PixelFormat::Rgba);
     assert!(f.layers.layer(0).flags.is_visible());
 
-    compare_with_reference_image(f.frame_image(0), "basic-16x16");
+    compare_with_reference_image(f.frame_image(0).unwrap(), "basic-16x16");
 }
 
 #[test]
@@ -65,10 +64,10 @@ fn layers_and_tags() {
     assert_eq!(f.pixel_format, PixelFormat::Rgba);
     assert_eq!(f.tags.len(), 3);
 
-    compare_with_reference_image(f.frame_image(0), "layers_and_tags_01");
-    compare_with_reference_image(f.frame_image(1), "layers_and_tags_02");
-    compare_with_reference_image(f.frame_image(2), "layers_and_tags_03");
-    compare_with_reference_image(f.frame_image(3), "layers_and_tags_04");
+    compare_with_reference_image(f.frame_image(0).unwrap(), "layers_and_tags_01");
+    compare_with_reference_image(f.frame_image(1).unwrap(), "layers_and_tags_02");
+    compare_with_reference_image(f.frame_image(2).unwrap(), "layers_and_tags_03");
+    compare_with_reference_image(f.frame_image(3).unwrap(), "layers_and_tags_04");
 }
 
 #[test]
@@ -80,7 +79,7 @@ fn big() {
     assert_eq!(f.layers.num_layers(), 1);
     assert_eq!(f.pixel_format, PixelFormat::Rgba);
 
-    compare_with_reference_image(f.frame_image(0), "big");
+    compare_with_reference_image(f.frame_image(0).unwrap(), "big");
 }
 
 #[test]
@@ -92,8 +91,8 @@ fn transparency() {
     assert_eq!(f.layers.num_layers(), 2);
     assert_eq!(f.pixel_format, PixelFormat::Rgba);
 
-    compare_with_reference_image(f.frame_image(0), "transparency_01");
-    compare_with_reference_image(f.frame_image(1), "transparency_02");
+    compare_with_reference_image(f.frame_image(0).unwrap(), "transparency_01");
+    compare_with_reference_image(f.frame_image(1).unwrap(), "transparency_02");
 }
 
 #[test]
@@ -106,7 +105,7 @@ fn background() {
     assert_eq!(f.pixel_format, PixelFormat::Rgba);
     println!("{:#?}", f.layers);
 
-    compare_with_reference_image(f.frame_image(0), "background");
+    compare_with_reference_image(f.frame_image(0).unwrap(), "background");
 }
 
 #[test]
@@ -118,7 +117,7 @@ fn blend_normal() {
     assert_eq!(f.layers.num_layers(), 2);
     assert_eq!(f.pixel_format, PixelFormat::Rgba);
 
-    compare_with_reference_image(f.frame_image(0), "blend_normal");
+    compare_with_reference_image(f.frame_image(0).unwrap(), "blend_normal");
 }
 
 #[test]
@@ -129,7 +128,7 @@ fn single_layer() {
     assert_eq!(f.layers.num_layers(), 6);
     assert_eq!(f.layers.find_layer_by_name("Layer 1"), Some(1));
 
-    compare_with_reference_image(f.layer_image(2, 1), "single_layer");
+    compare_with_reference_image(f.layer_image(2, 1).unwrap(), "single_layer");
 }
 
 /*

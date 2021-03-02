@@ -1,3 +1,9 @@
+use std::{
+    fs::File,
+    io::{BufReader, Read},
+    path::Path,
+};
+
 use crate::blend;
 use crate::*;
 use cel::{Cel, CelData};
@@ -60,7 +66,27 @@ impl PixelFormat {
 // }
 
 impl AsepriteFile {
-    pub fn frame_image(&self, frame: u16) -> RgbaImage {
+    /// Load Aseprite file. Loads full file into memory.
+    pub fn read_file(path: &Path) -> Result<Self> {
+        let file = File::open(&path)?;
+        let reader = BufReader::new(file);
+        parse::read_aseprite(reader)
+    }
+
+    /// Load Aseprite file from any input that implements `std::io::Read`.
+    ///
+    /// You can use this to read from an in memory file.
+    pub fn read<R: Read>(input: R) -> Result<AsepriteFile> {
+        parse::read_aseprite(input)
+    }
+
+    /// Construct the image belonging to the specific animation frame. Combines
+    /// layers according to their blend mode. Skips invisible layers (i.e.,
+    /// layers with a deactivated eye icon).
+    ///
+    /// Can fail if the `frame` does not exist, an unsupported feature is
+    /// used, or the file is malformed.
+    pub fn frame_image(&self, frame: u16) -> Result<RgbaImage> {
         let mut image = RgbaImage::new(self.width as u32, self.height as u32);
 
         for cel in &self.framedata[frame as usize] {
@@ -71,14 +97,14 @@ impl AsepriteFile {
             }
             // println!("====> Cel: {:?}", cel);
             //assert!(cel.opacity == 255, "NYI: different Cel opacities");
-            self.copy_cel(&mut image, cel);
+            self.copy_cel(&mut image, cel)?;
         }
 
         //into_rgba8_image(image)
-        image
+        Ok(image)
     }
 
-    fn copy_cel(&self, image: &mut RgbaImage, cel: &Cel) {
+    fn copy_cel(&self, image: &mut RgbaImage, cel: &Cel) -> Result<()> {
         assert!(self.pixel_format == PixelFormat::Rgba);
         match &cel.data {
             CelData::Linked(frame) => {
@@ -86,7 +112,9 @@ impl AsepriteFile {
                 for cel in self.frame_cels(*frame, cel.layer_index) {
                     match &cel.data {
                         CelData::Linked(_) => {
-                            panic!("Linked cel points to another linked cel");
+                            return Err(AsepriteParseError::InvalidInput(
+                                "Linked cel points to another linked cel".into(),
+                            ));
                         }
                         CelData::Raw {
                             width,
@@ -122,16 +150,17 @@ impl AsepriteFile {
                 );
             }
         }
+        Ok(())
     }
 
-    pub fn layer_image(&self, frame: u16, layer_id: usize) -> RgbaImage {
+    pub fn layer_image(&self, frame: u16, layer_id: usize) -> Result<RgbaImage> {
         let mut image = RgbaImage::new(self.width as u32, self.height as u32);
         for cel in &self.framedata[frame as usize] {
             if cel.layer_index as usize == layer_id {
-                self.copy_cel(&mut image, cel);
+                self.copy_cel(&mut image, cel)?;
             }
         }
-        image
+        Ok(image)
     }
 
     fn frame_cels(&self, frame: u16, layer: u16) -> Vec<&Cel> {

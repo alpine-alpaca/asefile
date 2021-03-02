@@ -1,4 +1,4 @@
-use crate::{read_string, Result};
+use crate::{parse::read_string, Result};
 use byteorder::{LittleEndian, ReadBytesExt};
 use std::io::Cursor;
 
