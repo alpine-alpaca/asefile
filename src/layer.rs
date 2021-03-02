@@ -35,6 +35,15 @@ impl Layers {
         &self.layers[id]
     }
 
+    pub fn find_layer_by_name(&self, name: &str) -> Option<usize> {
+        for id in 0..self.num_layers() {
+            if self.layer(id).name == name {
+                return Some(id);
+            }
+        }
+        None
+    }
+
     pub fn parent(&self, id: usize) -> Option<usize> {
         // TODO: We could precompute all of this.
         let my_child_level = self.layer(id).child_level;

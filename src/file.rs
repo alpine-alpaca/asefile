@@ -71,52 +71,66 @@ impl AsepriteFile {
             }
             // println!("====> Cel: {:?}", cel);
             //assert!(cel.opacity == 255, "NYI: different Cel opacities");
-            assert!(self.pixel_format == PixelFormat::Rgba);
-            match &cel.data {
-                CelData::Linked(frame) => {
-                    //assert!(false, "NYI: Linked Cels"),
-                    for cel in self.frame_cels(*frame, cel.layer_index) {
-                        match &cel.data {
-                            CelData::Linked(_) => {
-                                panic!("Linked cel points to another linked cel");
-                            }
-                            CelData::Raw {
-                                width,
-                                height,
-                                data,
-                            } => {
-                                copy_cel_to_image(
-                                    &mut image,
-                                    cel.x as i32,
-                                    cel.y as i32,
-                                    *width as i32,
-                                    *height as i32,
-                                    cel.opacity,
-                                    &data.0,
-                                );
-                            }
-                        }
-                    }
-                }
-                CelData::Raw {
-                    width,
-                    height,
-                    data,
-                } => {
-                    copy_cel_to_image(
-                        &mut image,
-                        cel.x as i32,
-                        cel.y as i32,
-                        *width as i32,
-                        *height as i32,
-                        cel.opacity,
-                        &data.0,
-                    );
-                }
-            }
+            self.copy_cel(&mut image, cel);
         }
 
         //into_rgba8_image(image)
+        image
+    }
+
+    fn copy_cel(&self, image: &mut RgbaImage, cel: &Cel) {
+        assert!(self.pixel_format == PixelFormat::Rgba);
+        match &cel.data {
+            CelData::Linked(frame) => {
+                //assert!(false, "NYI: Linked Cels"),
+                for cel in self.frame_cels(*frame, cel.layer_index) {
+                    match &cel.data {
+                        CelData::Linked(_) => {
+                            panic!("Linked cel points to another linked cel");
+                        }
+                        CelData::Raw {
+                            width,
+                            height,
+                            data,
+                        } => {
+                            copy_cel_to_image(
+                                image,
+                                cel.x as i32,
+                                cel.y as i32,
+                                *width as i32,
+                                *height as i32,
+                                cel.opacity,
+                                &data.0,
+                            );
+                        }
+                    }
+                }
+            }
+            CelData::Raw {
+                width,
+                height,
+                data,
+            } => {
+                copy_cel_to_image(
+                    image,
+                    cel.x as i32,
+                    cel.y as i32,
+                    *width as i32,
+                    *height as i32,
+                    cel.opacity,
+                    &data.0,
+                );
+            }
+        }
+    }
+
+    pub fn layer_image(&self, frame: u16, layer_id: usize) -> RgbaImage {
+        let mut image = RgbaImage::new(self.width as u32, self.height as u32);
+        for cel in &self.framedata[frame as usize] {
+            if cel.layer_index as usize == layer_id {
+                self.copy_cel(&mut image, cel);
+            }
+        }
         image
     }
 
@@ -139,17 +153,25 @@ fn copy_cel_to_image(
 ) {
     let x_end = x0 + width;
     let y_end = y0 + height;
-    assert!(x0 >= 0 && y0 >= 0);
+    // let x0 = x0.max(0);
+    // let y0 = y0.max(0);
+    //assert!(x0 >= 0 && y0 >= 0);
     let (img_width, img_height) = image.dimensions();
-    assert!(x_end <= img_width as i32);
-    assert!(y_end <= img_height as i32);
+    // assert!(x_end <= img_width as i32);
+    // assert!(y_end <= img_height as i32);
     // println!(
     //     "======> Writing cel: x:{}..{}, y:{}..{}",
     //     x0, x_end, y0, y_end
     // );
 
     for y in y0..y_end {
+        if y < 0 || y >= img_height as i32 {
+            continue;
+        }
         for x in x0..x_end {
+            if x < 0 || x >= img_width as i32 {
+                continue;
+            }
             let src = 4 * ((y - y0) as usize * width as usize + (x - x0) as usize);
 
             let pixel = Rgba::from_channels(

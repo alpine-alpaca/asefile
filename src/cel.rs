@@ -45,6 +45,7 @@ pub(crate) fn parse_cel_chunk(data: &[u8], pixel_format: PixelFormat) -> Result<
 
     let cel_data = match cel_type {
         0 => {
+            // Raw cel
             let width = input.read_u16::<LittleEndian>()?;
             let height = input.read_u16::<LittleEndian>()?;
             let data_size = width as usize * height as usize * pixel_format.bytes_per_pixel();
@@ -64,10 +65,12 @@ pub(crate) fn parse_cel_chunk(data: &[u8], pixel_format: PixelFormat) -> Result<
             }
         }
         1 => {
+            // Linked cel
             let linked = input.read_u16::<LittleEndian>()?;
             CelData::Linked(linked)
         }
         2 => {
+            // Compressed cel
             let width = input.read_u16::<LittleEndian>()?;
             let height = input.read_u16::<LittleEndian>()?;
             let expected_output_size =
@@ -96,7 +99,7 @@ pub(crate) fn parse_cel_chunk(data: &[u8], pixel_format: PixelFormat) -> Result<
     })
 }
 
-// Useful when debugging
+// For debugging
 #[allow(dead_code)]
 fn dump_bytes(data: &[u8]) {
     let mut column = 0;

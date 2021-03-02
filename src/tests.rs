@@ -121,6 +121,17 @@ fn blend_normal() {
     compare_with_reference_image(f.frame_image(0), "blend_normal");
 }
 
+#[test]
+fn single_layer() {
+    let f = load_test_file("layers_and_tags");
+
+    assert_eq!(f.num_frames, 4);
+    assert_eq!(f.layers.num_layers(), 6);
+    assert_eq!(f.layers.find_layer_by_name("Layer 1"), Some(1));
+
+    compare_with_reference_image(f.layer_image(2, 1), "single_layer");
+}
+
 /*
 #[test]
 fn gen_random_pixels() {

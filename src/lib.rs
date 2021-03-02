@@ -1,45 +1,29 @@
 #![warn(clippy::all)]
-use byteorder::{LittleEndian, ReadBytesExt};
-//use log::debug;
-use std::io::{self, Read};
-use std::string::FromUtf8Error;
 
 pub mod blend;
 pub mod cel;
 pub mod color_profile;
+pub mod error;
 pub mod file;
 pub mod layer;
 pub mod palette;
 pub mod rgba16;
+pub mod slice;
 pub mod tags;
 #[cfg(test)]
 mod tests;
+pub mod user_data;
+
+use byteorder::{LittleEndian, ReadBytesExt};
+use error::AsepriteParseError;
+//use log::debug;
+use std::io::Read;
 
 pub use color_profile::ColorProfile;
 pub use file::{AsepriteFile, PixelFormat};
 pub use layer::Layers;
 pub use palette::ColorPalette;
 pub use tags::{AnimationDirection, Tag};
-
-// TODO: impl Error
-#[derive(Debug)]
-pub enum AsepriteParseError {
-    InvalidInput(String),
-    UnsupportedFeature(String),
-    IoError(io::Error),
-}
-
-impl From<io::Error> for AsepriteParseError {
-    fn from(err: io::Error) -> Self {
-        AsepriteParseError::IoError(err)
-    }
-}
-
-impl From<FromUtf8Error> for AsepriteParseError {
-    fn from(err: FromUtf8Error) -> Self {
-        AsepriteParseError::InvalidInput(format!("Could not decode utf8: {}", err))
-    }
-}
 
 type Result<T> = std::result::Result<T, AsepriteParseError>;
 
@@ -211,6 +195,14 @@ fn parse_frame<R: Read>(
                 } else {
                     println!("Ignoring tags outside of frame 0");
                 }
+            }
+            ChunkType::Slice => {
+                let slice = slice::parse_slice_chunk(&chunk_data)?;
+                println!("Slice: {:#?}", slice);
+            }
+            ChunkType::UserData => {
+                let ud = user_data::parse_userdata_chunk(&chunk_data)?;
+                println!("Userdata: {:#?}", ud);
             }
             _ => {
                 println!("Ignoring chunk: {:?}", chunk_type);
