@@ -47,11 +47,11 @@ fn basic() {
     let f = load_test_file("basic-16x16");
     assert_eq!(f.num_frames, 1);
     assert_eq!((f.width, f.height), (16, 16));
-    assert_eq!(f.layers.num_layers(), 1);
+    assert_eq!(f.layers.len(), 1);
     assert_eq!(f.pixel_format, PixelFormat::Rgba);
     assert!(f.layers.layer(0).flags.is_visible());
 
-    compare_with_reference_image(f.frame_image(0).unwrap(), "basic-16x16");
+    compare_with_reference_image(f.frame(0).image().unwrap(), "basic-16x16");
 }
 
 #[test]
@@ -60,14 +60,14 @@ fn layers_and_tags() {
 
     assert_eq!(f.num_frames, 4);
     assert_eq!((f.width, f.height), (16, 16));
-    assert_eq!(f.layers.num_layers(), 6);
+    assert_eq!(f.layers.len(), 6);
     assert_eq!(f.pixel_format, PixelFormat::Rgba);
     assert_eq!(f.tags.len(), 3);
 
-    compare_with_reference_image(f.frame_image(0).unwrap(), "layers_and_tags_01");
-    compare_with_reference_image(f.frame_image(1).unwrap(), "layers_and_tags_02");
-    compare_with_reference_image(f.frame_image(2).unwrap(), "layers_and_tags_03");
-    compare_with_reference_image(f.frame_image(3).unwrap(), "layers_and_tags_04");
+    compare_with_reference_image(f.frame(0).image().unwrap(), "layers_and_tags_01");
+    compare_with_reference_image(f.frame(1).image().unwrap(), "layers_and_tags_02");
+    compare_with_reference_image(f.frame(2).image().unwrap(), "layers_and_tags_03");
+    compare_with_reference_image(f.frame(3).image().unwrap(), "layers_and_tags_04");
 }
 
 #[test]
@@ -76,10 +76,10 @@ fn big() {
 
     assert_eq!(f.num_frames, 1);
     assert_eq!((f.width, f.height), (256, 256));
-    assert_eq!(f.layers.num_layers(), 1);
+    assert_eq!(f.layers.len(), 1);
     assert_eq!(f.pixel_format, PixelFormat::Rgba);
 
-    compare_with_reference_image(f.frame_image(0).unwrap(), "big");
+    compare_with_reference_image(f.frame(0).image().unwrap(), "big");
 }
 
 #[test]
@@ -88,11 +88,11 @@ fn transparency() {
 
     assert_eq!(f.num_frames, 2);
     assert_eq!((f.width, f.height), (16, 16));
-    assert_eq!(f.layers.num_layers(), 2);
+    assert_eq!(f.layers.len(), 2);
     assert_eq!(f.pixel_format, PixelFormat::Rgba);
 
-    compare_with_reference_image(f.frame_image(0).unwrap(), "transparency_01");
-    compare_with_reference_image(f.frame_image(1).unwrap(), "transparency_02");
+    compare_with_reference_image(f.frame(0).image().unwrap(), "transparency_01");
+    compare_with_reference_image(f.frame(1).image().unwrap(), "transparency_02");
 }
 
 #[test]
@@ -101,11 +101,11 @@ fn background() {
 
     assert_eq!(f.num_frames, 1);
     assert_eq!((f.width, f.height), (256, 256));
-    assert_eq!(f.layers.num_layers(), 1);
+    assert_eq!(f.layers.len(), 1);
     assert_eq!(f.pixel_format, PixelFormat::Rgba);
     println!("{:#?}", f.layers);
 
-    compare_with_reference_image(f.frame_image(0).unwrap(), "background");
+    compare_with_reference_image(f.frame(0).image().unwrap(), "background");
 }
 
 #[test]
@@ -114,10 +114,10 @@ fn blend_normal() {
 
     assert_eq!(f.num_frames, 1);
     assert_eq!((f.width, f.height), (256, 256));
-    assert_eq!(f.layers.num_layers(), 2);
+    assert_eq!(f.layers.len(), 2);
     assert_eq!(f.pixel_format, PixelFormat::Rgba);
 
-    compare_with_reference_image(f.frame_image(0).unwrap(), "blend_normal");
+    compare_with_reference_image(f.frame(0).image().unwrap(), "blend_normal");
 }
 
 #[test]
@@ -125,8 +125,8 @@ fn single_layer() {
     let f = load_test_file("layers_and_tags");
 
     assert_eq!(f.num_frames, 4);
-    assert_eq!(f.layers.num_layers(), 6);
-    assert_eq!(f.layers.find_layer_by_name("Layer 1"), Some(1));
+    assert_eq!(f.layers.len(), 6);
+    assert_eq!(f.layers.by_name("Layer 1"), Some(1));
 
     compare_with_reference_image(f.layer_image(2, 1).unwrap(), "single_layer");
 }

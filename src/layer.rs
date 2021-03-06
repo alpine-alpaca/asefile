@@ -27,7 +27,7 @@ pub struct Layers {
 }
 
 impl Layers {
-    pub fn num_layers(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.layers.len()
     }
 
@@ -35,8 +35,8 @@ impl Layers {
         &self.layers[id]
     }
 
-    pub fn find_layer_by_name(&self, name: &str) -> Option<usize> {
-        for id in 0..self.num_layers() {
+    pub fn by_name(&self, name: &str) -> Option<usize> {
+        for id in 0..self.len() {
             if self.layer(id).name == name {
                 return Some(id);
             }

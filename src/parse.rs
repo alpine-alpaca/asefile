@@ -183,6 +183,7 @@ fn parse_frame<R: Read>(
                 let ud = user_data::parse_userdata_chunk(&chunk_data)?;
                 println!("Userdata: {:#?}", ud);
             }
+            ChunkType::OldPalette04 | ChunkType::OldPalette11 => {}
             _ => {
                 println!("Ignoring chunk: {:?}", chunk_type);
             }

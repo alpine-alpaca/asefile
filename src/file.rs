@@ -10,17 +10,23 @@ use cel::{Cel, CelData};
 use image::{Pixel, Rgba, RgbaImage};
 
 pub struct AsepriteFile {
-    pub width: u16,
-    pub height: u16,
-    pub num_frames: u16,
+    pub(crate) width: u16,
+    pub(crate) height: u16,
+    pub(crate) num_frames: u16,
     pub pixel_format: PixelFormat,
     pub transparent_color_index: u8, // only for PixelFormat::Indexed
-    pub palette: Option<ColorPalette>,
-    pub layers: Layers,
+    pub(crate) palette: Option<ColorPalette>,
+    pub(crate) layers: Layers,
     pub color_profile: Option<ColorProfile>,
     pub frame_times: Vec<u16>,
     pub tags: Vec<Tag>,
     pub(crate) framedata: Vec<Vec<cel::Cel>>,
+}
+
+/// A reference to a single frame.
+pub struct Frame<'a> {
+    file: &'a AsepriteFile,
+    index: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -80,13 +86,50 @@ impl AsepriteFile {
         parse::read_aseprite(input)
     }
 
+    /// Width in pixels.
+    pub fn width(&self) -> usize {
+        self.width as usize
+    }
+
+    /// Height in pixels.
+    pub fn height(&self) -> usize {
+        self.height as usize
+    }
+
+    /// Width and height in pixels.
+    pub fn size(&self) -> (usize, usize) {
+        (self.width(), self.height())
+    }
+
+    /// Number of animation frames.
+    pub fn num_frames(&self) -> usize {
+        self.num_frames as usize
+    }
+
+    /// The color palette in the image.
+    pub fn palette(&self) -> Option<&ColorPalette> {
+        self.palette.as_ref()
+    }
+
+    pub fn layers(&self) -> &Layers {
+        &self.layers
+    }
+
+    pub fn frame(&self, index: u16) -> Frame {
+        assert!(index < self.num_frames);
+        Frame {
+            file: self,
+            index: index as usize,
+        }
+    }
+
     /// Construct the image belonging to the specific animation frame. Combines
     /// layers according to their blend mode. Skips invisible layers (i.e.,
     /// layers with a deactivated eye icon).
     ///
     /// Can fail if the `frame` does not exist, an unsupported feature is
     /// used, or the file is malformed.
-    pub fn frame_image(&self, frame: u16) -> Result<RgbaImage> {
+    fn frame_image(&self, frame: u16) -> Result<RgbaImage> {
         let mut image = RgbaImage::new(self.width as u32, self.height as u32);
 
         for cel in &self.framedata[frame as usize] {
@@ -168,6 +211,18 @@ impl AsepriteFile {
             .iter()
             .filter(|c| c.layer_index == layer)
             .collect()
+    }
+}
+
+impl<'a> Frame<'a> {
+    /// Construct the image belonging to the specific animation frame. Combines
+    /// layers according to their blend mode. Skips invisible layers (i.e.,
+    /// layers with a deactivated eye icon).
+    ///
+    /// Can fail if the `frame` does not exist, an unsupported feature is
+    /// used, or the file is malformed.
+    pub fn image(&self) -> Result<RgbaImage> {
+        self.file.frame_image(self.index as u16)
     }
 }
 
