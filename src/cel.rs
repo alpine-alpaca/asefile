@@ -1,8 +1,137 @@
-use crate::{AsepriteParseError, PixelFormat, Result};
+use crate::{AsepriteFile, AsepriteParseError, PixelFormat, Result};
 use byteorder::{LittleEndian, ReadBytesExt};
 use flate2::read::ZlibDecoder;
+use image::RgbaImage;
 use std::fmt;
 use std::io::{Cursor, Read};
+
+/// A reference to a single Cel. This contains the image data at a specific
+/// layer and frame. In the timeline view these dots.
+pub struct Cel<'a> {
+    pub(crate) file: &'a AsepriteFile,
+    pub(crate) layer: u32,
+    pub(crate) frame: u32,
+}
+
+impl<'a> Cel<'a> {
+    pub fn image(&self) -> RgbaImage {
+        self.file
+            .layer_image(self.frame as u16, self.layer as usize)
+    }
+}
+
+pub(crate) struct CelsData {
+    // Mapping: frame_id -> layer_id -> Option<RawCel>
+    data: Vec<Vec<Option<RawCel>>>,
+    num_frames: u32,
+}
+
+impl CelsData {
+    pub fn new(num_frames: u32) -> Self {
+        let mut data = Vec::with_capacity(num_frames as usize);
+        // Initialize with one layer (outer Vec) and zero RawCel (inner Vec).
+        data.resize_with(num_frames as usize, || vec![None]);
+        CelsData { data, num_frames }
+    }
+
+    fn check_valid_frame_id(&self, frame_id: u16) -> Result<()> {
+        if !((frame_id as usize) < self.data.len()) {
+            return Err(AsepriteParseError::InvalidInput(format!(
+                "Invalid frame reference in Cel: {}",
+                frame_id
+            )));
+        }
+        Ok(())
+    }
+
+    pub fn add_cel(&mut self, frame_id: u16, cel: RawCel) -> Result<()> {
+        self.check_valid_frame_id(frame_id)?;
+
+        let layer_id = cel.layer_index;
+        let min_layers = layer_id as u32 + 1;
+        let layers = &mut self.data[frame_id as usize];
+        if layers.len() < min_layers as usize {
+            layers.resize_with(min_layers as usize, || None);
+        }
+        if let Some(_) = layers[layer_id as usize] {
+            return Err(AsepriteParseError::InvalidInput(format!(
+                "Multiple Cels for frame {}, layer {}",
+                frame_id, layer_id
+            )));
+        }
+        layers[layer_id as usize] = Some(cel);
+
+        Ok(())
+    }
+
+    pub fn frame_cels(&self, frame_id: u16) -> impl Iterator<Item = (u32, &RawCel)> {
+        self.data[frame_id as usize]
+            .iter()
+            .enumerate()
+            .filter_map(|(layer_id, cel)| match cel.as_ref() {
+                Some(c) => Some((layer_id as u32, c)),
+                None => None,
+            })
+    }
+
+    // Frame ID must be valid. If Layer ID is out of bounds always returns an
+    // empty Vec.
+    pub fn cel(&self, frame_id: u16, layer_id: u16) -> Option<&RawCel> {
+        let layers = &self.data[frame_id as usize];
+        if (layer_id as usize) >= layers.len() {
+            // Return a reference to an empty vec. Otherwise, we'd need to
+            // return an iterator.
+            None
+        } else {
+            layers[layer_id as usize].as_ref()
+        }
+    }
+
+    fn validate_cel(&self, frame: u32, layer: usize) -> Result<()> {
+        let layers = &self.data[frame as usize];
+        if let Some(ref cel) = layers[layer] {
+            match &cel.data {
+                CelData::Raw { .. } => {
+                    // TODO: Verify data length
+                    // TODO: For indexed data, verify that data is always
+                    // a valid palette index.
+                }
+                CelData::Linked(other_frame) => {
+                    match self.cel(*other_frame, layer as u16) {
+                        Some(other_cel) => {
+                            match &other_cel.data {
+                                CelData::Raw {..} => {},
+                                CelData::Linked(_) => {
+                                    return Err(AsepriteParseError::InvalidInput(
+                                        format!("Invalid Cel reference. Cel (f:{},l:{}) links to cel (f:{},l:{}) but that cel contains no data.",
+                                    frame, layer, *other_frame, layer)
+                                    ))
+                                }
+                            }
+                        }
+                        None => {
+                            return Err(AsepriteParseError::InvalidInput(
+                                format!("Invalid Cel reference. Cel (f:{},l:{}) links to cel (f:{},l:{}) but that cel contains no data.",
+                            frame, layer, *other_frame, layer)
+                            ))
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        for frame in 0..self.num_frames {
+            let layers = &self.data[frame as usize];
+            for layer in 0..layers.len() {
+                self.validate_cel(frame, layer)?;
+            }
+        }
+        Ok(())
+    }
+}
 
 #[derive(Debug)]
 pub(crate) struct RawCel {

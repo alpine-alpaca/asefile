@@ -1,7 +1,6 @@
-use crate::{parse::read_string, AsepriteFile, AsepriteParseError, Result};
+use crate::{cel::Cel, parse::read_string, AsepriteFile, AsepriteParseError, Result};
 use bitflags::bitflags;
 use byteorder::{LittleEndian, ReadBytesExt};
-use image::RgbaImage;
 use std::{io::Cursor, ops::Index};
 
 /// Types of layer.
@@ -101,28 +100,13 @@ impl<'a> Layer<'a> {
     }
 
     /// Get a reference to the Cel for this frame in the layer.
-    pub fn frame(&self, frame_id: u32) -> CelRef {
+    pub fn frame(&self, frame_id: u32) -> Cel {
         assert!((frame_id as usize) < self.file.num_frames());
-        CelRef {
+        Cel {
             file: self.file,
             layer: self.layer_id as u32,
             frame: frame_id,
         }
-    }
-}
-
-/// A reference to a single Cel. This contains the image data at a specific
-/// layer and frame. In the timeline view these dots.
-pub struct CelRef<'a> {
-    pub(crate) file: &'a AsepriteFile,
-    pub(crate) layer: u32,
-    pub(crate) frame: u32,
-}
-
-impl<'a> CelRef<'a> {
-    pub fn image(&self) -> Result<RgbaImage> {
-        self.file
-            .layer_image(self.frame as u16, self.layer as usize)
     }
 }
 

@@ -51,7 +51,7 @@ fn basic() {
     assert_eq!(f.pixel_format, PixelFormat::Rgba);
     assert!(f.layer(0).flags().is_visible());
 
-    compare_with_reference_image(f.frame(0).image().unwrap(), "basic-16x16");
+    compare_with_reference_image(f.frame(0).image(), "basic-16x16");
 }
 
 #[test]
@@ -64,10 +64,10 @@ fn layers_and_tags() {
     assert_eq!(f.pixel_format, PixelFormat::Rgba);
     assert_eq!(f.tags.len(), 3);
 
-    compare_with_reference_image(f.frame(0).image().unwrap(), "layers_and_tags_01");
-    compare_with_reference_image(f.frame(1).image().unwrap(), "layers_and_tags_02");
-    compare_with_reference_image(f.frame(2).image().unwrap(), "layers_and_tags_03");
-    compare_with_reference_image(f.frame(3).image().unwrap(), "layers_and_tags_04");
+    compare_with_reference_image(f.frame(0).image(), "layers_and_tags_01");
+    compare_with_reference_image(f.frame(1).image(), "layers_and_tags_02");
+    compare_with_reference_image(f.frame(2).image(), "layers_and_tags_03");
+    compare_with_reference_image(f.frame(3).image(), "layers_and_tags_04");
 }
 
 #[test]
@@ -79,7 +79,7 @@ fn big() {
     assert_eq!(f.num_layers(), 1);
     assert_eq!(f.pixel_format, PixelFormat::Rgba);
 
-    compare_with_reference_image(f.frame(0).image().unwrap(), "big");
+    compare_with_reference_image(f.frame(0).image(), "big");
 }
 
 #[test]
@@ -91,8 +91,21 @@ fn transparency() {
     assert_eq!(f.num_layers(), 2);
     assert_eq!(f.pixel_format(), PixelFormat::Rgba);
 
-    compare_with_reference_image(f.frame(0).image().unwrap(), "transparency_01");
-    compare_with_reference_image(f.frame(1).image().unwrap(), "transparency_02");
+    compare_with_reference_image(f.frame(0).image(), "transparency_01");
+    compare_with_reference_image(f.frame(1).image(), "transparency_02");
+}
+
+#[test]
+fn cels_basic() {
+    use std::path::Path;
+    let path = Path::new("./tests/data/basic-16x16.aseprite");
+    let ase = AsepriteFile::read_file(&path).unwrap();
+
+    let layer0 = ase.layer(0);
+    let cel1 = layer0.frame(0);
+    let _cel2 = ase.frame(0).layer(0);
+
+    let _image = cel1.image();
 }
 
 #[test]
@@ -105,7 +118,7 @@ fn background() {
     assert_eq!(f.pixel_format, PixelFormat::Rgba);
     println!("{:#?}", f.layers);
 
-    compare_with_reference_image(f.frame(0).image().unwrap(), "background");
+    compare_with_reference_image(f.frame(0).image(), "background");
 }
 
 #[test]
@@ -117,7 +130,7 @@ fn blend_normal() {
     assert_eq!(f.num_layers(), 2);
     assert_eq!(f.pixel_format, PixelFormat::Rgba);
 
-    compare_with_reference_image(f.frame(0).image().unwrap(), "blend_normal");
+    compare_with_reference_image(f.frame(0).image(), "blend_normal");
 }
 
 #[test]
@@ -128,7 +141,7 @@ fn single_layer() {
     assert_eq!(f.num_layers(), 6);
     assert_eq!(f.named_layer("Layer 1").map(|l| l.id()), Some(1));
 
-    compare_with_reference_image(f.layer_image(2, 1).unwrap(), "single_layer");
+    compare_with_reference_image(f.layer_image(2, 1), "single_layer");
 }
 
 /*

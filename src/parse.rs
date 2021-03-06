@@ -10,15 +10,16 @@ struct ParseInfo {
     palette: Option<palette::ColorPalette>,
     color_profile: Option<color_profile::ColorProfile>,
     layers: Option<layer::LayersData>,
-    framedata: Vec<Vec<cel::RawCel>>,
+    framedata: cel::CelsData, // Vec<Vec<cel::RawCel>>,
     frame_times: Vec<u16>,
     tags: Option<Vec<Tag>>,
 }
 
 impl ParseInfo {
-    fn add_cel(&mut self, frame_id: u16, cel: cel::RawCel) {
-        let idx = frame_id as usize;
-        self.framedata[idx].push(cel);
+    fn add_cel(&mut self, frame_id: u16, cel: cel::RawCel) -> Result<()> {
+        self.framedata.add_cel(frame_id, cel)
+        // let idx = frame_id as usize;
+        // self.framedata[idx].push(cel);
     }
 }
 
@@ -60,8 +61,9 @@ pub fn read_aseprite<R: Read>(mut input: R) -> Result<AsepriteFile> {
         ));
     }
 
-    let mut framedata = Vec::with_capacity(num_frames as usize);
-    framedata.resize_with(num_frames as usize, Vec::new);
+    let framedata = cel::CelsData::new(num_frames as u32);
+    // let mut framedata = Vec::with_capacity(num_frames as usize);
+    // framedata.resize_with(num_frames as usize, Vec::new);
     let mut parse_info = ParseInfo {
         palette: None,
         color_profile: None,
@@ -87,6 +89,8 @@ pub fn read_aseprite<R: Read>(mut input: R) -> Result<AsepriteFile> {
 
     // println!("bytes: {}, size: {}x{}", size, width, height);
     // println!("color_depth: {}, num_colors: {}", color_depth, num_colors);
+
+    parse_info.framedata.validate()?;
 
     Ok(AsepriteFile {
         width,
@@ -166,10 +170,10 @@ fn parse_frame<R: Read>(
             }
             ChunkType::Cel => {
                 let cel = cel::parse_cel_chunk(&chunk_data, pixel_format)?;
-                parse_info.add_cel(frame_id, cel);
+                parse_info.add_cel(frame_id, cel)?;
             }
             ChunkType::Tags => {
-                let tags = tags::parse_palette_chunk(&chunk_data)?;
+                let tags = tags::parse_tags_chunk(&chunk_data)?;
                 if frame_id == 0 {
                     parse_info.tags = Some(tags);
                 } else {

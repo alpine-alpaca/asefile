@@ -17,7 +17,7 @@ pub enum AnimationDirection {
     PingPong,
 }
 
-pub(crate) fn parse_palette_chunk(data: &[u8]) -> Result<Vec<Tag>> {
+pub(crate) fn parse_tags_chunk(data: &[u8]) -> Result<Vec<Tag>> {
     let mut input = Cursor::new(data);
 
     let num_tags = input.read_u16::<LittleEndian>()?;

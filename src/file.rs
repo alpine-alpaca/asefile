@@ -6,9 +6,10 @@ use std::{
 
 use crate::{
     blend,
+    cel::CelsData,
     layer::{Layer, LayersData},
 };
-use crate::{layer::CelRef, *};
+use crate::{cel::Cel, *};
 use cel::{CelData, RawCel};
 use image::{Pixel, Rgba, RgbaImage};
 
@@ -23,7 +24,7 @@ pub struct AsepriteFile {
     pub(crate) color_profile: Option<ColorProfile>,
     pub(crate) frame_times: Vec<u16>,
     pub(crate) tags: Vec<Tag>,
-    pub(crate) framedata: Vec<Vec<cel::RawCel>>,
+    pub(crate) framedata: CelsData, // Vec<Vec<cel::RawCel>>,
 }
 
 /// A reference to a single frame.
@@ -164,35 +165,33 @@ impl AsepriteFile {
     ///
     /// Can fail if the `frame` does not exist, an unsupported feature is
     /// used, or the file is malformed.
-    fn frame_image(&self, frame: u16) -> Result<RgbaImage> {
+    fn frame_image(&self, frame: u16) -> RgbaImage {
         let mut image = RgbaImage::new(self.width as u32, self.height as u32);
 
-        for cel in &self.framedata[frame as usize] {
+        for (layer_id, cel) in self.framedata.frame_cels(frame) {
             // TODO: This must be done in layer order (pre-sort Cels?)
-            if !self.layer(cel.layer_index as u32).is_visible() {
+            if !self.layer(layer_id).is_visible() {
                 // println!("===> skipping invisible Cel: {:?}", cel);
                 continue;
             }
             // println!("====> Cel: {:?}", cel);
             //assert!(cel.opacity == 255, "NYI: different Cel opacities");
-            self.copy_cel(&mut image, cel)?;
+            self.copy_cel(&mut image, cel);
         }
 
         //into_rgba8_image(image)
-        Ok(image)
+        image
     }
 
-    fn copy_cel(&self, image: &mut RgbaImage, cel: &RawCel) -> Result<()> {
+    fn copy_cel(&self, image: &mut RgbaImage, cel: &RawCel) {
         assert!(self.pixel_format == PixelFormat::Rgba);
         match &cel.data {
             CelData::Linked(frame) => {
                 //assert!(false, "NYI: Linked Cels"),
-                for cel in self.frame_cels(*frame, cel.layer_index) {
+                for cel in self.framedata.cel(*frame, cel.layer_index) {
                     match &cel.data {
                         CelData::Linked(_) => {
-                            return Err(AsepriteParseError::InvalidInput(
-                                "Linked cel points to another linked cel".into(),
-                            ));
+                            panic!("Cel links to empty cel. Should have been caught by validate()");
                         }
                         CelData::Raw {
                             width,
@@ -228,25 +227,22 @@ impl AsepriteFile {
                 );
             }
         }
-        Ok(())
     }
 
-    pub(crate) fn layer_image(&self, frame: u16, layer_id: usize) -> Result<RgbaImage> {
+    pub(crate) fn layer_image(&self, frame: u16, layer_id: usize) -> RgbaImage {
         let mut image = RgbaImage::new(self.width as u32, self.height as u32);
-        for cel in &self.framedata[frame as usize] {
-            if cel.layer_index as usize == layer_id {
-                self.copy_cel(&mut image, cel)?;
-            }
+        for cel in self.framedata.cel(frame, layer_id as u16) {
+            self.copy_cel(&mut image, cel);
         }
-        Ok(image)
+        image
     }
 
-    fn frame_cels(&self, frame: u16, layer: u16) -> Vec<&RawCel> {
-        self.framedata[frame as usize]
-            .iter()
-            .filter(|c| c.layer_index == layer)
-            .collect()
-    }
+    // fn frame_cels(&self, frame: u16, layer: u16) -> Vec<&RawCel> {
+    //     self.framedata[frame as usize]
+    //         .iter()
+    //         .filter(|c| c.layer_index == layer)
+    //         .collect()
+    // }
 }
 
 pub struct LayersIter<'a> {
@@ -273,18 +269,14 @@ impl<'a> Frame<'a> {
     /// layers according to their blend mode. Skips invisible layers (i.e.,
     /// layers with a deactivated eye icon).
     ///
-    /// Can fail if an unsupported feature is used, or the file is malformed.
-    ///
-    /// TODO: Check for unspported features at parse time and make this function
-    /// infallible.
-    pub fn image(&self) -> Result<RgbaImage> {
+    pub fn image(&self) -> RgbaImage {
         self.file.frame_image(self.index as u16)
     }
 
     /// Get cel corresponding to the given layer in this frame.
-    pub fn layer(&self, layer_id: u32) -> CelRef {
+    pub fn layer(&self, layer_id: u32) -> Cel {
         assert!(layer_id < self.file.num_layers());
-        CelRef {
+        Cel {
             file: self.file,
             layer: layer_id,
             frame: self.index,
