@@ -9,14 +9,14 @@ use crate::{cel, color_profile, layer, palette, slice, tags, user_data, Tag};
 struct ParseInfo {
     palette: Option<palette::ColorPalette>,
     color_profile: Option<color_profile::ColorProfile>,
-    layers: Option<layer::Layers>,
-    framedata: Vec<Vec<cel::Cel>>,
+    layers: Option<layer::LayersData>,
+    framedata: Vec<Vec<cel::RawCel>>,
     frame_times: Vec<u16>,
     tags: Option<Vec<Tag>>,
 }
 
 impl ParseInfo {
-    fn add_cel(&mut self, frame_id: u16, cel: cel::Cel) {
+    fn add_cel(&mut self, frame_id: u16, cel: cel::RawCel) {
         let idx = frame_id as usize;
         self.framedata[idx].push(cel);
     }
@@ -41,7 +41,9 @@ pub fn read_aseprite<R: Read>(mut input: R) -> Result<AsepriteFile> {
     let default_frame_time = input.read_u16::<LittleEndian>()?;
     let _placeholder1 = input.read_u32::<LittleEndian>()?;
     let _placeholder2 = input.read_u32::<LittleEndian>()?;
-    let transparent_color_index = input.read_u32::<LittleEndian>()? & 0xff;
+    let transparent_color_index = input.read_u8()?;
+    let _ignore1 = input.read_u8()?;
+    let _ignore2 = input.read_u16::<LittleEndian>()?;
     let _num_colors = input.read_u16::<LittleEndian>()?;
     let pixel_width = input.read_u8()?;
     let pixel_height = input.read_u8()?;
@@ -69,7 +71,7 @@ pub fn read_aseprite<R: Read>(mut input: R) -> Result<AsepriteFile> {
         tags: None,
     };
 
-    let pixel_format = parse_pixel_format(color_depth)?;
+    let pixel_format = parse_pixel_format(color_depth, transparent_color_index)?;
 
     for frame_id in 0..num_frames {
         // println!("--- Frame {} -------", frame_id);
@@ -96,7 +98,6 @@ pub fn read_aseprite<R: Read>(mut input: R) -> Result<AsepriteFile> {
         framedata: parse_info.framedata,
         layers,
         palette: parse_info.palette,
-        transparent_color_index: transparent_color_index as u8,
         tags: parse_info.tags.unwrap_or_default(),
     })
 }
@@ -130,7 +131,7 @@ fn parse_frame<R: Read>(
 
     //println!("Num chunks: {}, bytes: {}", num_chunks, bytes);
 
-    let mut found_layers: Vec<layer::Layer> = Vec::new();
+    let mut found_layers: Vec<layer::LayerData> = Vec::new();
 
     let mut bytes_available = bytes as i64 - 16;
     for _chunk in 0..num_chunks {
@@ -261,9 +262,11 @@ pub(crate) fn read_string<R: Read>(input: &mut R) -> Result<String> {
     Ok(s)
 }
 
-fn parse_pixel_format(color_depth: u16) -> Result<PixelFormat> {
+fn parse_pixel_format(color_depth: u16, transparent_color_index: u8) -> Result<PixelFormat> {
     match color_depth {
-        8 => Ok(PixelFormat::Indexed),
+        8 => Ok(PixelFormat::Indexed {
+            transparent_color_index,
+        }),
         16 => Ok(PixelFormat::Grayscale),
         32 => Ok(PixelFormat::Rgba),
         _ => Err(AsepriteParseError::InvalidInput(format!(

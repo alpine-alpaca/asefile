@@ -5,7 +5,7 @@ use std::fmt;
 use std::io::{Cursor, Read};
 
 #[derive(Debug)]
-pub(crate) struct Cel {
+pub(crate) struct RawCel {
     pub layer_index: u16,
     pub x: i16,
     pub y: i16,
@@ -32,7 +32,7 @@ impl fmt::Debug for CelBytes {
     }
 }
 
-pub(crate) fn parse_cel_chunk(data: &[u8], pixel_format: PixelFormat) -> Result<Cel> {
+pub(crate) fn parse_cel_chunk(data: &[u8], pixel_format: PixelFormat) -> Result<RawCel> {
     let mut input = Cursor::new(data);
 
     let layer_index = input.read_u16::<LittleEndian>()?;
@@ -90,7 +90,7 @@ pub(crate) fn parse_cel_chunk(data: &[u8], pixel_format: PixelFormat) -> Result<
         }
     };
 
-    Ok(Cel {
+    Ok(RawCel {
         layer_index,
         x,
         y,

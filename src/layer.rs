@@ -1,73 +1,154 @@
-use crate::{parse::read_string, AsepriteParseError, Result};
+use crate::{parse::read_string, AsepriteFile, AsepriteParseError, Result};
+use bitflags::bitflags;
 use byteorder::{LittleEndian, ReadBytesExt};
-use std::fmt;
-use std::io::Cursor;
+use image::RgbaImage;
+use std::{io::Cursor, ops::Index};
 
+/// Types of layer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LayerType {
+    /// A regular image layer. This is the normal layer type.
     Image,
+    /// A layer that groups other layers and does not contain any image data.
+    /// In Aseprite these are represented by a folder icon.
     Group,
 }
 
+bitflags! {
+    pub struct LayerFlags: u32 {
+        /// Layer is visible (eye icon is enabled).
+        const VISIBLE = 0x0001;
+        /// Layer can be modified (lock icon is disabled).
+        const EDITABLE = 0x0002;
+        /// Layer cannot be moved.
+        const MOVEMENT_LOCKED = 0x0004;
+        /// Layer is background (stack order cannot be changed).
+        const BACKGROUND = 0x0008;
+        /// Prefer to link cels when the user copies them.
+        const CONTINUOUS = 0x0010;
+        /// Prefer to show this group layer collapsed.
+        const COLLAPSED = 0x0020;
+        /// This is a reference layer.
+        const REFERENCE = 0x0040;
+
+        const BACKGROUND_LAYER = Self::MOVEMENT_LOCKED.bits | Self::BACKGROUND.bits;
+    }
+}
+
+/// A reference to a single layer.
+pub struct Layer<'a> {
+    pub(crate) file: &'a AsepriteFile,
+    pub(crate) layer_id: u32,
+}
+
+impl<'a> Layer<'a> {
+    fn data(&self) -> &LayerData {
+        &self.file.layers[self.layer_id]
+    }
+
+    /// This layer's ID.
+    pub fn id(&self) -> u32 {
+        self.layer_id
+    }
+
+    /// Layer's flags
+    pub fn flags(&self) -> LayerFlags {
+        self.data().flags
+    }
+
+    /// Name of the layer
+    pub fn name(&self) -> &str {
+        &self.data().name
+    }
+
+    /// Blend mode of the layer. Describes how this layer is combined with the
+    /// layers underneath it. See [BlendMode] for details.
+    pub fn blend_mode(&self) -> BlendMode {
+        self.data().blend_mode
+    }
+
+    /// Layer opacity describes
+    pub fn opacity(&self) -> u8 {
+        self.data().opacity
+    }
+
+    /// Describes whether this is a regular layer or a group layer.
+    pub fn layer_type(&self) -> LayerType {
+        self.data().layer_type
+    }
+
+    /// The parent of this layer, if any. For layers that are part of a group
+    /// this returns the parent layer.
+    ///
+    /// Does not indicate the blend order of layers (i.e., which layers are
+    /// above or below).
+    pub fn parent(&self) -> Option<Layer> {
+        match self.file.layers.parents[self.layer_id as usize] {
+            None => None,
+            Some(id) => Some(Layer {
+                file: self.file,
+                layer_id: id,
+            }),
+        }
+    }
+
+    /// Returns if this layer is visible. This requires that this layer and all
+    /// of its parent layers are visible.
+    pub fn is_visible(&self) -> bool {
+        let layer_is_visible = self.data().flags.contains(LayerFlags::VISIBLE);
+        let parent_is_visible = self.parent().map(|p| p.is_visible()).unwrap_or(true);
+        layer_is_visible && parent_is_visible
+    }
+
+    /// Get a reference to the Cel for this frame in the layer.
+    pub fn frame(&self, frame_id: u32) -> CelRef {
+        assert!((frame_id as usize) < self.file.num_frames());
+        CelRef {
+            file: self.file,
+            layer: self.layer_id as u32,
+            frame: frame_id,
+        }
+    }
+}
+
+/// A reference to a single Cel. This contains the image data at a specific
+/// layer and frame. In the timeline view these dots.
+pub struct CelRef<'a> {
+    pub(crate) file: &'a AsepriteFile,
+    pub(crate) layer: u32,
+    pub(crate) frame: u32,
+}
+
+impl<'a> CelRef<'a> {
+    pub fn image(&self) -> Result<RgbaImage> {
+        self.file
+            .layer_image(self.frame as u16, self.layer as usize)
+    }
+}
+
 #[derive(Debug)]
-pub struct Layer {
-    pub flags: LayerFlags,
-    pub name: String,
-    pub blend_mode: BlendMode,
-    pub opacity: u8,
-    pub layer_type: LayerType,
+pub struct LayerData {
+    pub(crate) flags: LayerFlags,
+    pub(crate) name: String,
+    pub(crate) blend_mode: BlendMode,
+    pub(crate) opacity: u8,
+    pub(crate) layer_type: LayerType,
     child_level: u16,
 }
 
 #[derive(Debug)]
-pub struct Layers {
+pub struct LayersData {
     // Sorted back to front (or bottom to top in the GUI, but groups occur
     // before their children, i.e., lower index)
-    layers: Vec<Layer>,
+    pub(crate) layers: Vec<LayerData>,
+    parents: Vec<Option<u32>>,
 }
 
-impl Layers {
-    pub fn len(&self) -> usize {
-        self.layers.len()
-    }
+impl Index<u32> for LayersData {
+    type Output = LayerData;
 
-    pub fn layer(&self, id: usize) -> &Layer {
-        &self.layers[id]
-    }
-
-    pub fn by_name(&self, name: &str) -> Option<usize> {
-        for id in 0..self.len() {
-            if self.layer(id).name == name {
-                return Some(id);
-            }
-        }
-        None
-    }
-
-    pub fn parent(&self, id: usize) -> Option<usize> {
-        // TODO: We could precompute all of this.
-        let my_child_level = self.layer(id).child_level;
-        if my_child_level == 0 {
-            return None;
-        }
-        let mut parent_candidate = id - 1;
-        while self.layer(parent_candidate).child_level >= my_child_level {
-            assert!(parent_candidate > 0);
-            parent_candidate -= 1;
-        }
-        Some(parent_candidate)
-    }
-
-    /// Check if layer is visible, taking into account parent visibility.
-    pub fn is_visible(&self, id: usize) -> bool {
-        // TODO: This could also be precomputed.
-        let layer_is_visible = self.layer(id).flags.is_visible();
-        let parent_is_visible = if let Some(parent) = self.parent(id) {
-            self.is_visible(parent)
-        } else {
-            true
-        };
-        layer_is_visible && parent_is_visible
+    fn index(&self, index: u32) -> &Self::Output {
+        &self.layers[index as usize]
     }
 }
 
@@ -95,62 +176,13 @@ pub enum BlendMode {
 }
 
 impl LayerFlags {
+    /// Shortcut for `.contains(LayerFlags::VISIBLE)`.
     pub fn is_visible(&self) -> bool {
-        self.0 & 1 != 0
-    }
-
-    pub fn is_editable(&self) -> bool {
-        self.0 & 2 != 0
-    }
-
-    pub fn is_movement_locked(&self) -> bool {
-        self.0 & 4 != 0
-    }
-
-    pub fn is_background(&self) -> bool {
-        self.0 & 8 != 0
-    }
-
-    pub fn prefer_linked_cels(&self) -> bool {
-        self.0 & 16 != 0
-    }
-
-    pub fn is_collapsed(&self) -> bool {
-        self.0 & 32 != 0
-    }
-
-    pub fn is_reference(&self) -> bool {
-        self.0 & 64 != 0
+        self.contains(LayerFlags::VISIBLE)
     }
 }
 
-pub struct LayerFlags(u16);
-
-impl fmt::Debug for LayerFlags {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "LayerFlags([")?;
-        let mut sep = "";
-        for (id, name) in FLAG_NAMES.iter().enumerate() {
-            if self.0 & (1 << id) != 0 {
-                write!(f, "{}{}", sep, name)?;
-                sep = ","
-            }
-        }
-        write!(f, "])")
-    }
-}
-
-static FLAG_NAMES: [&str; 7] = [
-    "Visible",
-    "Editable",
-    "LockMovement",
-    "Background",
-    "PreferLinkedCels",
-    "DisplayCollapsed",
-    "Reference",
-];
-
-pub(crate) fn parse_layer_chunk(data: &[u8]) -> Result<Layer> {
+pub(crate) fn parse_layer_chunk(data: &[u8]) -> Result<LayerData> {
     let mut input = Cursor::new(data);
 
     let flags = input.read_u16::<LittleEndian>()?;
@@ -164,7 +196,7 @@ pub(crate) fn parse_layer_chunk(data: &[u8]) -> Result<Layer> {
     let _reserved2 = input.read_u16::<LittleEndian>()?;
     let name = read_string(&mut input)?;
 
-    let flags = LayerFlags(flags);
+    let flags = LayerFlags::from_bits_truncate(flags as u32);
 
     let layer_type = parse_layer_type(layer_type)?;
     let blend_mode = parse_blend_mode(blend_mode)?;
@@ -174,7 +206,7 @@ pub(crate) fn parse_layer_chunk(data: &[u8]) -> Result<Layer> {
     //     name, flags, layer_type, blend_mode, opacity
     // );
 
-    Ok(Layer {
+    Ok(LayerData {
         name,
         flags,
         blend_mode,
@@ -223,7 +255,31 @@ fn parse_blend_mode(id: u16) -> Result<BlendMode> {
     }
 }
 
-pub(crate) fn collect_layers(layers: Vec<Layer>) -> Result<Layers> {
+fn compute_parents(layers: &Vec<LayerData>) -> Vec<Option<u32>> {
+    let mut result = Vec::with_capacity(layers.len());
+
+    for id in 0..layers.len() {
+        let parent = {
+            let my_child_level = layers[id].child_level;
+            if my_child_level == 0 {
+                None
+            } else {
+                // Find first layer with a lower id and a lower child_level.
+                let mut parent_candidate = id - 1;
+                while layers[parent_candidate].child_level >= my_child_level {
+                    assert!(parent_candidate > 0);
+                    parent_candidate -= 1;
+                }
+                Some(parent_candidate as u32)
+            }
+        };
+        result.push(parent);
+    }
+    result
+}
+
+pub(crate) fn collect_layers(layers: Vec<LayerData>) -> Result<LayersData> {
     // TODO: Validate some properties
-    Ok(Layers { layers })
+    let parents = compute_parents(&layers);
+    Ok(LayersData { layers, parents })
 }

@@ -4,36 +4,45 @@ use std::{
     path::Path,
 };
 
-use crate::blend;
-use crate::*;
-use cel::{Cel, CelData};
+use crate::{
+    blend,
+    layer::{Layer, LayersData},
+};
+use crate::{layer::CelRef, *};
+use cel::{CelData, RawCel};
 use image::{Pixel, Rgba, RgbaImage};
 
+/// A parsed Aseprite file.
 pub struct AsepriteFile {
     pub(crate) width: u16,
     pub(crate) height: u16,
     pub(crate) num_frames: u16,
-    pub pixel_format: PixelFormat,
-    pub transparent_color_index: u8, // only for PixelFormat::Indexed
+    pub(crate) pixel_format: PixelFormat,
     pub(crate) palette: Option<ColorPalette>,
-    pub(crate) layers: Layers,
-    pub color_profile: Option<ColorProfile>,
-    pub frame_times: Vec<u16>,
-    pub tags: Vec<Tag>,
-    pub(crate) framedata: Vec<Vec<cel::Cel>>,
+    pub(crate) layers: LayersData,
+    pub(crate) color_profile: Option<ColorProfile>,
+    pub(crate) frame_times: Vec<u16>,
+    pub(crate) tags: Vec<Tag>,
+    pub(crate) framedata: Vec<Vec<cel::RawCel>>,
 }
 
 /// A reference to a single frame.
 pub struct Frame<'a> {
     file: &'a AsepriteFile,
-    index: usize,
+    index: u32,
 }
 
+/// Pixel format of the source Aseprite file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PixelFormat {
+    /// Red, green, blue, and alpha with 8 bits each.
     Rgba,
+    /// 8 bit grayscale and 8 bit alpha,
     Grayscale,
-    Indexed,
+    /// Indexed color. Color is determined by palette.
+    /// The `transparent_color_index` is used to indicate a
+    /// transparent pixel in any non-background layer.
+    Indexed { transparent_color_index: u8 },
 }
 
 impl PixelFormat {
@@ -41,35 +50,10 @@ impl PixelFormat {
         match self {
             PixelFormat::Rgba => 4,
             PixelFormat::Grayscale => 2,
-            PixelFormat::Indexed => 1,
+            PixelFormat::Indexed { .. } => 1,
         }
     }
 }
-
-// pub struct ImageDataRgba {
-//     width: u32,
-//     height: u32,
-//     bytes: Vec<u8>,
-// }
-
-// pub struct Rgba {
-//     pub r: u8,
-//     pub g: u8,
-// }
-
-// impl ImageDataRgba {
-//     pub fn new(width: u32, height: u32) -> Self {
-//         assert!(width <= 65536 && height <= 65536);
-//         let num_bytes = width as u64 * height as u64 * 4;
-//         assert!(num_bytes < usize::MAX as u64);
-//         ImageDataRgba {
-//             width, height,
-//             bytes: vec![0; num_bytes as usize],
-//         }
-//     }
-
-//     // pub fn pixel(&self, x: u32, y: u32) ->
-// }
 
 impl AsepriteFile {
     /// Load Aseprite file. Loads full file into memory.
@@ -106,21 +90,72 @@ impl AsepriteFile {
         self.num_frames as usize
     }
 
+    /// Number of layers.
+    pub fn num_layers(&self) -> u32 {
+        self.layers.layers.len() as u32
+    }
+
     /// The color palette in the image.
     pub fn palette(&self) -> Option<&ColorPalette> {
         self.palette.as_ref()
     }
 
-    pub fn layers(&self) -> &Layers {
-        &self.layers
+    /// Access a layer by ID.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the ID is not valid. ID must be less than number of layers.
+    pub fn layer(&self, id: u32) -> Layer {
+        assert!(id < self.num_layers());
+        Layer {
+            file: &self,
+            layer_id: id,
+        }
     }
 
-    pub fn frame(&self, index: u16) -> Frame {
-        assert!(index < self.num_frames);
-        Frame {
-            file: self,
-            index: index as usize,
+    /// Access a layer by name.
+    ///
+    /// If multiple layers with the same name exist returns the layer with
+    /// the lower ID.
+    pub fn named_layer(&self, name: &str) -> Option<Layer> {
+        for layer_id in 0..self.num_layers() {
+            let l = self.layer(layer_id);
+            if l.name() == name {
+                return Some(l);
+            }
         }
+        None
+    }
+
+    /// An iterator over all layers.
+    pub fn layers(&self) -> LayersIter {
+        LayersIter {
+            file: self,
+            next: 0,
+        }
+    }
+
+    /// A reference to a single frame.
+    pub fn frame(&self, index: u32) -> Frame {
+        assert!(index < self.num_frames as u32);
+        Frame { file: self, index }
+    }
+
+    /// The pixel format.
+    pub fn pixel_format(&self) -> PixelFormat {
+        self.pixel_format
+    }
+
+    pub fn num_tags(&self) -> u32 {
+        self.tags.len() as u32
+    }
+
+    pub fn tag(&self, tag_id: u32) -> &Tag {
+        &self.tags[tag_id as usize]
+    }
+
+    pub fn color_profile(&self) -> Option<&ColorProfile> {
+        self.color_profile.as_ref()
     }
 
     /// Construct the image belonging to the specific animation frame. Combines
@@ -134,7 +169,7 @@ impl AsepriteFile {
 
         for cel in &self.framedata[frame as usize] {
             // TODO: This must be done in layer order (pre-sort Cels?)
-            if !self.layers.is_visible(cel.layer_index as usize) {
+            if !self.layer(cel.layer_index as u32).is_visible() {
                 // println!("===> skipping invisible Cel: {:?}", cel);
                 continue;
             }
@@ -147,7 +182,7 @@ impl AsepriteFile {
         Ok(image)
     }
 
-    fn copy_cel(&self, image: &mut RgbaImage, cel: &Cel) -> Result<()> {
+    fn copy_cel(&self, image: &mut RgbaImage, cel: &RawCel) -> Result<()> {
         assert!(self.pixel_format == PixelFormat::Rgba);
         match &cel.data {
             CelData::Linked(frame) => {
@@ -196,7 +231,7 @@ impl AsepriteFile {
         Ok(())
     }
 
-    pub fn layer_image(&self, frame: u16, layer_id: usize) -> Result<RgbaImage> {
+    pub(crate) fn layer_image(&self, frame: u16, layer_id: usize) -> Result<RgbaImage> {
         let mut image = RgbaImage::new(self.width as u32, self.height as u32);
         for cel in &self.framedata[frame as usize] {
             if cel.layer_index as usize == layer_id {
@@ -206,11 +241,30 @@ impl AsepriteFile {
         Ok(image)
     }
 
-    fn frame_cels(&self, frame: u16, layer: u16) -> Vec<&Cel> {
+    fn frame_cels(&self, frame: u16, layer: u16) -> Vec<&RawCel> {
         self.framedata[frame as usize]
             .iter()
             .filter(|c| c.layer_index == layer)
             .collect()
+    }
+}
+
+pub struct LayersIter<'a> {
+    file: &'a AsepriteFile,
+    next: u32,
+}
+
+impl<'a> Iterator for LayersIter<'a> {
+    type Item = Layer<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.next < self.file.num_layers() {
+            let item = self.file.layer(self.next);
+            self.next += 1;
+            Some(item)
+        } else {
+            None
+        }
     }
 }
 
@@ -219,10 +273,27 @@ impl<'a> Frame<'a> {
     /// layers according to their blend mode. Skips invisible layers (i.e.,
     /// layers with a deactivated eye icon).
     ///
-    /// Can fail if the `frame` does not exist, an unsupported feature is
-    /// used, or the file is malformed.
+    /// Can fail if an unsupported feature is used, or the file is malformed.
+    ///
+    /// TODO: Check for unspported features at parse time and make this function
+    /// infallible.
     pub fn image(&self) -> Result<RgbaImage> {
         self.file.frame_image(self.index as u16)
+    }
+
+    /// Get cel corresponding to the given layer in this frame.
+    pub fn layer(&self, layer_id: u32) -> CelRef {
+        assert!(layer_id < self.file.num_layers());
+        CelRef {
+            file: self.file,
+            layer: layer_id,
+            frame: self.index,
+        }
+    }
+
+    /// Frame duration in milliseconds.
+    pub fn duration(&self) -> u32 {
+        self.file.frame_times[self.index as usize] as u32
     }
 }
 
