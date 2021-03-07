@@ -21,7 +21,7 @@ pub struct AsepriteFile {
     pub(crate) pixel_format: PixelFormat,
     pub(crate) palette: Option<ColorPalette>,
     pub(crate) layers: LayersData,
-    pub(crate) color_profile: Option<ColorProfile>,
+    // pub(crate) color_profile: Option<ColorProfile>,
     pub(crate) frame_times: Vec<u16>,
     pub(crate) tags: Vec<Tag>,
     pub(crate) framedata: CelsData, // Vec<Vec<cel::RawCel>>,
@@ -155,9 +155,9 @@ impl AsepriteFile {
         &self.tags[tag_id as usize]
     }
 
-    pub fn color_profile(&self) -> Option<&ColorProfile> {
-        self.color_profile.as_ref()
-    }
+    // pub fn color_profile(&self) -> Option<&ColorProfile> {
+    //     self.color_profile.as_ref()
+    // }
 
     /// Construct the image belonging to the specific animation frame. Combines
     /// layers according to their blend mode. Skips invisible layers (i.e.,

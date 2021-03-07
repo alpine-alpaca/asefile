@@ -2,18 +2,44 @@ use crate::{parse::read_string, AsepriteParseError, Result};
 use byteorder::{LittleEndian, ReadBytesExt};
 use std::io::Cursor;
 
+/// A tag is a grouping of one or more frames.
+///
+/// Tag ranges may overlap each other. Tag names are _not_ guaranteed to be
+/// unique.
 #[derive(Debug, Clone)]
 pub struct Tag {
-    pub name: String,
-    pub from_frame: u16,
-    pub to_frame: u16,
-    pub animation_direction: AnimationDirection,
+    name: String,
+    from_frame: u16,
+    to_frame: u16,
+    animation_direction: AnimationDirection,
 }
 
+impl Tag {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn from_frame(&self) -> u32 {
+        self.from_frame as u32
+    }
+
+    pub fn to_frame(&self) -> u32 {
+        self.to_frame as u32
+    }
+
+    pub fn animation_direction(&self) -> AnimationDirection {
+        self.animation_direction
+    }
+}
+
+/// Describes how the tag's frames should be animated.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AnimationDirection {
+    /// Start at `from_frame` and count up to `to_frame`.
     Forward,
+    /// Start at `from_frame` and count down to `to_frame`.
     Reverse,
+    /// Start at `from_frame`, count up to `to_frame`, then back down to `from_frame`.
     PingPong,
 }
 

@@ -3,8 +3,13 @@ use std::{error::Error, fmt, io, string::FromUtf8Error};
 /// An error occured while reading the Aseprite file.
 #[derive(Debug)]
 pub enum AsepriteParseError {
+    /// The input data was malformed. String contains detailed message.
     InvalidInput(String),
+    /// The input data was correct, but uses a feature that is not supported by
+    /// this version of `asefile`. String contains detailed message.
     UnsupportedFeature(String),
+    /// An IO error occured. Also includes errors where the input was shorter
+    /// than expected.
     IoError(io::Error),
 }
 

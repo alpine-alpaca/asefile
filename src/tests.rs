@@ -49,7 +49,7 @@ fn basic() {
     assert_eq!((f.width, f.height), (16, 16));
     assert_eq!(f.num_layers(), 1);
     assert_eq!(f.pixel_format, PixelFormat::Rgba);
-    assert!(f.layer(0).flags().is_visible());
+    assert!(f.layer(0).flags().contains(LayerFlags::VISIBLE));
 
     compare_with_reference_image(f.frame(0).image(), "basic-16x16");
 }
@@ -142,6 +142,38 @@ fn single_layer() {
     assert_eq!(f.named_layer("Layer 1").map(|l| l.id()), Some(1));
 
     compare_with_reference_image(f.layer_image(2, 1), "single_layer");
+}
+
+#[test]
+fn linked_cels() {
+    let f = load_test_file("linked_cels");
+
+    assert_eq!(f.num_frames, 3);
+    assert_eq!(f.num_layers(), 3);
+    //assert_eq!(f.named_layer("Layer 1").map(|l| l.id()), Some(1));
+
+    compare_with_reference_image(f.frame(0).image(), "linked_cels_01");
+    compare_with_reference_image(f.frame(1).image(), "linked_cels_02");
+    compare_with_reference_image(f.frame(2).image(), "linked_cels_03");
+}
+
+#[test]
+fn indexed() {
+    let f = load_test_file("indexed");
+
+    assert_eq!(f.size(), (64, 64));
+
+    //compare_with_reference_image(f.frame(0).image(), "linked_cels_01");
+}
+
+#[test]
+fn palette() {
+    let f = load_test_file("palette");
+
+    let pal = f.palette().unwrap();
+    assert_eq!(pal.num_colors(), 85);
+    assert_eq!(pal.get(0).unwrap().raw_rgba8(), [46, 34, 47, 255]);
+    assert_eq!(pal.get(71).unwrap().raw_rgba8(), [0, 0, 0, 83]);
 }
 
 /*

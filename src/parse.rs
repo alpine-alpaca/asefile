@@ -90,6 +90,7 @@ pub fn read_aseprite<R: Read>(mut input: R) -> Result<AsepriteFile> {
     // println!("bytes: {}, size: {}x{}", size, width, height);
     // println!("color_depth: {}, num_colors: {}", color_depth, num_colors);
 
+    //println!("framedata: {:#?}", parse_info.framedata);
     parse_info.framedata.validate()?;
 
     Ok(AsepriteFile {
@@ -97,7 +98,7 @@ pub fn read_aseprite<R: Read>(mut input: R) -> Result<AsepriteFile> {
         height,
         num_frames,
         pixel_format,
-        color_profile: parse_info.color_profile,
+        // color_profile: parse_info.color_profile,
         frame_times: parse_info.frame_times,
         framedata: parse_info.framedata,
         layers,

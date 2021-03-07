@@ -6,7 +6,7 @@ use std::fmt;
 use std::io::{Cursor, Read};
 
 /// A reference to a single Cel. This contains the image data at a specific
-/// layer and frame. In the timeline view these dots.
+/// layer and frame. In the timeline view these are the dots.
 pub struct Cel<'a> {
     pub(crate) file: &'a AsepriteFile,
     pub(crate) layer: u32,
@@ -20,10 +20,42 @@ impl<'a> Cel<'a> {
     }
 }
 
+/// Organizes all Cels into a 2d array.
 pub(crate) struct CelsData {
     // Mapping: frame_id -> layer_id -> Option<RawCel>
     data: Vec<Vec<Option<RawCel>>>,
     num_frames: u32,
+}
+
+struct CelId {
+    frame: u16,
+    layer: u16,
+}
+
+impl fmt::Debug for CelId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "F{}_L{}", self.frame, self.layer)
+    }
+}
+
+impl fmt::Debug for CelsData {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut d = f.debug_map();
+        for frame in 0..self.data.len() {
+            for (layer, cel) in self.data[frame].iter().enumerate() {
+                if let Some(ref cel) = cel {
+                    d.entry(
+                        &CelId {
+                            frame: frame as u16,
+                            layer: layer as u16,
+                        },
+                        cel,
+                    );
+                }
+            }
+        }
+        d.finish()
+    }
 }
 
 impl CelsData {

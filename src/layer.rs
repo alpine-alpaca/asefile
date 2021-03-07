@@ -14,6 +14,10 @@ pub enum LayerType {
 }
 
 bitflags! {
+    /// Various layer attributes.
+    ///
+    /// For checking whether a layer is visible prefer to use [Layer::is_visible]
+    /// as that also takes into account any parent layer's visibility.
     pub struct LayerFlags: u32 {
         /// Layer is visible (eye icon is enabled).
         const VISIBLE = 0x0001;
@@ -136,6 +140,8 @@ impl Index<u32> for LayersData {
     }
 }
 
+/// Describes how the pixels from two layers are combined.
+/// See also [Blend modes (Wikipedia)](https://en.wikipedia.org/wiki/Blend_modes)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BlendMode {
     Normal,
@@ -157,13 +163,6 @@ pub enum BlendMode {
     Addition,
     Subtract,
     Divide,
-}
-
-impl LayerFlags {
-    /// Shortcut for `.contains(LayerFlags::VISIBLE)`.
-    pub fn is_visible(&self) -> bool {
-        self.contains(LayerFlags::VISIBLE)
-    }
 }
 
 pub(crate) fn parse_layer_chunk(data: &[u8]) -> Result<LayerData> {

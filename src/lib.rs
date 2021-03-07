@@ -92,7 +92,6 @@ let cel2 = ase.frame(0).layer(0);
 let image = cel1.image();
 ```
 
-
 */
 
 pub(crate) mod blend;
@@ -103,19 +102,19 @@ pub(crate) mod file;
 pub(crate) mod layer;
 pub(crate) mod palette;
 pub(crate) mod parse;
-pub mod rgba16;
-pub mod slice;
-pub mod tags;
+pub(crate) mod slice;
+pub(crate) mod tags;
 #[cfg(test)]
 mod tests;
-pub mod user_data;
+pub(crate) mod user_data;
 
+/// A specialized `Result` type for Aseprite parsing functions.
 pub type Result<T> = std::result::Result<T, AsepriteParseError>;
 
 pub use cel::Cel;
-pub use color_profile::ColorProfile;
+// pub use color_profile::ColorProfile;
 pub use error::AsepriteParseError;
 pub use file::{AsepriteFile, Frame, PixelFormat};
 pub use layer::{BlendMode, Layer, LayerFlags};
-pub use palette::ColorPalette;
+pub use palette::{ColorPalette, ColorPaletteEntry};
 pub use tags::{AnimationDirection, Tag};
