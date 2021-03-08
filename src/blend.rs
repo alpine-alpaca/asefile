@@ -73,9 +73,16 @@ pub(crate) fn normal(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
 
 */
 pub(crate) fn multiply(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
+    blender(backdrop, src, opacity, multiply_baseline)
+}
+
+fn blender<F>(backdrop: Color8, src: Color8, opacity: u8, f: F) -> Color8
+where
+    F: Fn(Color8, Color8, u8) -> Color8,
+{
     if backdrop[3] != 0 {
         let norm = normal(backdrop, src, opacity);
-        let blend = multiply_baseline(backdrop, src, opacity);
+        let blend = f(backdrop, src, opacity);
         let back_alpha = backdrop[3];
         let normal_to_blend_merge = merge(norm, blend, back_alpha);
         let src_total_alpha = mul_un8(src[3] as i32, opacity as i32);
@@ -95,18 +102,137 @@ pub(crate) fn multiply(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
   src = rgba(r, g, b, 0) | (src & rgba_a_mask);
   return rgba_blender_normal(backdrop, src, opacity);
 */
-pub(crate) fn multiply_baseline(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
+fn blend_channel<F>(backdrop: Color8, src: Color8, opacity: u8, f: F) -> Color8
+where
+    F: Fn(i32, i32) -> u8,
+{
     let (back_r, back_g, back_b, _) = as_rgba_i32(backdrop);
     let (src_r, src_g, src_b, _) = as_rgba_i32(src);
-    let r = blend_multiply(back_r, src_r);
-    let g = blend_multiply(back_g, src_g);
-    let b = blend_multiply(back_b, src_b);
+    let r = f(back_r, src_r);
+    let g = f(back_g, src_g);
+    let b = f(back_b, src_b);
     let src = Rgba([r, g, b, src[3]]);
     normal(backdrop, src, opacity)
 }
 
+fn multiply_baseline(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
+    blend_channel(backdrop, src, opacity, blend_multiply)
+}
+
 fn blend_multiply(a: i32, b: i32) -> u8 {
     mul_un8(a, b)
+}
+
+pub(crate) fn screen(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
+    blender(backdrop, src, opacity, screen_baseline)
+}
+
+fn screen_baseline(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
+    blend_channel(backdrop, src, opacity, blend_screen)
+}
+
+// blend_screen(b, s, t)     ((b) + (s) - MUL_UN8((b), (s), (t)))
+fn blend_screen(a: i32, b: i32) -> u8 {
+    (a + b - mul_un8(a, b) as i32) as u8
+}
+
+pub(crate) fn overlay(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
+    blender(backdrop, src, opacity, overlay_baseline)
+}
+
+fn overlay_baseline(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
+    blend_channel(backdrop, src, opacity, blend_overlay)
+}
+
+// blend_overlay(b, s, t)    (blend_hard_light(s, b, t))
+// blend_hard_light(b, s, t) ((s) < 128 ?                          \
+//    blend_multiply((b), (s)<<1, (t)):    \
+//    blend_screen((b), ((s)<<1)-255, (t)))
+
+fn blend_overlay(b: i32, s: i32) -> u8 {
+    blend_hard_light(s, b)
+}
+
+fn blend_hard_light(b: i32, s: i32) -> u8 {
+    if s < 128 {
+        blend_multiply(b, s << 1)
+    } else {
+        blend_screen(b, (s << 1) - 255)
+    }
+}
+
+pub(crate) fn darken(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
+    blender(backdrop, src, opacity, darken_baseline)
+}
+
+fn darken_baseline(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
+    blend_channel(backdrop, src, opacity, blend_darken)
+}
+
+fn blend_darken(b: i32, s: i32) -> u8 {
+    b.min(s) as u8
+}
+
+pub(crate) fn lighten(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
+    blender(backdrop, src, opacity, lighten_baseline)
+}
+
+fn lighten_baseline(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
+    blend_channel(backdrop, src, opacity, blend_lighten)
+}
+
+fn blend_lighten(b: i32, s: i32) -> u8 {
+    b.max(s) as u8
+}
+
+pub(crate) fn color_dodge(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
+    blender(backdrop, src, opacity, color_dodge_baseline)
+}
+
+fn color_dodge_baseline(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
+    blend_channel(backdrop, src, opacity, blend_color_dodge)
+}
+
+fn blend_color_dodge(b: i32, s: i32) -> u8 {
+    if b == 0 {
+        return 0;
+    }
+    let s = 255 - s;
+    if b >= s {
+        255
+    } else {
+        // in floating point: b / (1-s)
+        div_un8(b, s)
+    }
+}
+
+pub(crate) fn color_burn(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
+    blender(backdrop, src, opacity, color_burn_baseline)
+}
+
+fn color_burn_baseline(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
+    blend_channel(backdrop, src, opacity, blend_color_burn)
+}
+
+fn blend_color_burn(b: i32, s: i32) -> u8 {
+    if b == 255 {
+        return 255;
+    }
+    let b = 255 - b;
+    if b >= s {
+        0
+    } else {
+        // in floating point: 1 - ((1-b)/s)
+        255 - div_un8(b, s)
+    }
+}
+
+pub(crate) fn hard_light(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
+    blender(backdrop, src, opacity, hard_light_baseline)
+}
+
+fn hard_light_baseline(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
+    blend_channel(backdrop, src, opacity, blend_hard_light)
 }
 
 fn as_rgba_i32(color: Color8) -> (i32, i32, i32, i32) {
@@ -196,6 +322,14 @@ fn test_normal() {
 fn mul_un8(a: i32, b: i32) -> u8 {
     let t = a * b + 0x80;
     let r = ((t >> 8) + t) >> 8;
+    r as u8
+}
+
+// DIV_UN8(a, b)    (((uint16_t) (a) * 0xff + ((b) / 2)) / (b))
+fn div_un8(a: i32, b: i32) -> u8 {
+    let t = a * 0xff;
+    let u = b / 2;
+    let r = (t + u) / b;
     r as u8
 }
 // fn mul_un8()

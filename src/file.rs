@@ -296,10 +296,27 @@ impl<'a> Frame<'a> {
 type BlendFn = Box<dyn Fn(Color8, Color8, u8) -> Color8>;
 
 fn blend_mode_to_blend_fn(mode: BlendMode) -> BlendFn {
+    // TODO: Make these statically allocated
     match mode {
         BlendMode::Normal => Box::new(blend::normal),
         BlendMode::Multiply => Box::new(blend::multiply),
-        _ => panic!("Unsupported blend mode: {:?}", mode),
+        BlendMode::Screen => Box::new(blend::screen),
+        BlendMode::Overlay => Box::new(blend::overlay),
+        BlendMode::Darken => Box::new(blend::darken),
+        BlendMode::Lighten => Box::new(blend::lighten),
+        BlendMode::ColorDodge => Box::new(blend::color_dodge),
+        BlendMode::ColorBurn => Box::new(blend::color_burn),
+        BlendMode::HardLight => Box::new(blend::hard_light),
+        BlendMode::SoftLight => todo!("blend mode: {:?}", mode),
+        BlendMode::Difference => todo!("blend mode: {:?}", mode),
+        BlendMode::Exclusion => todo!("blend mode: {:?}", mode),
+        BlendMode::Hue => todo!("blend mode: {:?}", mode),
+        BlendMode::Saturation => todo!("blend mode: {:?}", mode),
+        BlendMode::Color => todo!("blend mode: {:?}", mode),
+        BlendMode::Luminosity => todo!("blend mode: {:?}", mode),
+        BlendMode::Addition => todo!("blend mode: {:?}", mode),
+        BlendMode::Subtract => todo!("blend mode: {:?}", mode),
+        BlendMode::Divide => todo!("blend mode: {:?}", mode),
     }
 }
 

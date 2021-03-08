@@ -146,6 +146,90 @@ fn blend_multiply() {
 }
 
 #[test]
+fn blend_screen() {
+    let f = load_test_file("blend_screen");
+
+    assert_eq!(f.num_frames, 1);
+    assert_eq!((f.width, f.height), (256, 256));
+    assert_eq!(f.num_layers(), 2);
+    assert_eq!(f.pixel_format, PixelFormat::Rgba);
+
+    compare_with_reference_image(f.frame(0).image(), "blend_screen");
+}
+
+#[test]
+fn blend_darken() {
+    let f = load_test_file("blend_darken");
+
+    assert_eq!(f.num_frames, 1);
+    assert_eq!((f.width, f.height), (256, 256));
+    assert_eq!(f.num_layers(), 2);
+    assert_eq!(f.pixel_format, PixelFormat::Rgba);
+
+    compare_with_reference_image(f.frame(0).image(), "blend_darken");
+}
+
+#[test]
+fn blend_lighten() {
+    let f = load_test_file("blend_lighten");
+
+    assert_eq!(f.num_frames, 1);
+    assert_eq!((f.width, f.height), (256, 256));
+    assert_eq!(f.num_layers(), 2);
+    assert_eq!(f.pixel_format, PixelFormat::Rgba);
+
+    compare_with_reference_image(f.frame(0).image(), "blend_lighten");
+}
+
+#[test]
+fn blend_overlay() {
+    let f = load_test_file("blend_overlay");
+
+    assert_eq!(f.num_frames, 1);
+    assert_eq!((f.width, f.height), (256, 256));
+    assert_eq!(f.num_layers(), 2);
+    assert_eq!(f.pixel_format, PixelFormat::Rgba);
+
+    compare_with_reference_image(f.frame(0).image(), "blend_overlay");
+}
+
+#[test]
+fn blend_color_dodge() {
+    let f = load_test_file("blend_colordodge");
+
+    assert_eq!(f.num_frames, 1);
+    assert_eq!((f.width, f.height), (256, 256));
+    assert_eq!(f.num_layers(), 2);
+    assert_eq!(f.pixel_format, PixelFormat::Rgba);
+
+    compare_with_reference_image(f.frame(0).image(), "blend_colordodge");
+}
+
+#[test]
+fn blend_color_burn() {
+    let f = load_test_file("blend_colorburn");
+
+    assert_eq!(f.num_frames, 1);
+    assert_eq!((f.width, f.height), (256, 256));
+    assert_eq!(f.num_layers(), 2);
+    assert_eq!(f.pixel_format, PixelFormat::Rgba);
+
+    compare_with_reference_image(f.frame(0).image(), "blend_colorburn");
+}
+
+#[test]
+fn blend_hard_light() {
+    let f = load_test_file("blend_hardlight");
+
+    assert_eq!(f.num_frames, 1);
+    assert_eq!((f.width, f.height), (256, 256));
+    assert_eq!(f.num_layers(), 2);
+    assert_eq!(f.pixel_format, PixelFormat::Rgba);
+
+    compare_with_reference_image(f.frame(0).image(), "blend_hardlight");
+}
+
+#[test]
 fn single_layer() {
     let f = load_test_file("layers_and_tags");
 
