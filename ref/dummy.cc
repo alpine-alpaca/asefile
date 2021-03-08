@@ -168,19 +168,184 @@ color_t rgba_blender_##name##_n(color_t backdrop, color_t src, int opacity) {   
 RGBA_BLENDER_N(multiply)
 
 
-int main(int argc, char* argv[]) {
-    // color_t back = rgba(0, 205, 249, 255);
-    // color_t pixel = rgba(237, 118, 20, 255);
 
-    // color_t result = rgba_blender_merge(back, pixel, 128);
-    // printf("%d %d %d %d", rgba_getr(result), rgba_getg(result),
-    //     rgba_getb(result), rgba_geta(result));
 
+
+
+void test_merge() {
+    color_t back = rgba(0, 205, 249, 255);
+    color_t pixel = rgba(237, 118, 20, 255);
+
+    color_t result = rgba_blender_merge(back, pixel, 128);
+    printf("%d %d %d %d", rgba_getr(result), rgba_getg(result),
+        rgba_getb(result), rgba_geta(result));
+}
+
+void test_multiply() {
     color_t back = rgba(245, 65, 48, 10);
     color_t pixel = rgba(42, 41, 227, 209);
 
     color_t result = rgba_blender_multiply_n(back, pixel, 255);
     printf("%d %d %d %d", rgba_getr(result), rgba_getg(result),
         rgba_getb(result), rgba_geta(result));
+}
 
+// -----------------------------------------------------------------------------
+
+
+static double lum(double r, double g, double b)
+{
+  return 0.3*r + 0.59*g + 0.11*b;
+}
+
+static double maxd(double a, double b) {
+    if (a > b) {
+        return a;
+    } else {
+        return b;
+    }
+}
+
+static double mind(double a, double b) {
+    if (a < b) {
+        return a;
+    } else {
+        return b;
+    }
+}
+
+
+static double sat(double r, double g, double b)
+{
+  return maxd(r, maxd(g, b)) - mind(r, mind(g, b));
+}
+
+static void clip_color(double& r, double& g, double& b)
+{
+  double l = lum(r, g, b);
+  double n = mind(r, mind(g, b));
+  double x = maxd(r, maxd(g, b));
+
+  if (n < 0) {
+    r = l + (((r - l) * l) / (l - n));
+    g = l + (((g - l) * l) / (l - n));
+    b = l + (((b - l) * l) / (l - n));
+  }
+
+  if (x > 1) {
+    r = l + (((r - l) * (1 - l)) / (x - l));
+    g = l + (((g - l) * (1 - l)) / (x - l));
+    b = l + (((b - l) * (1 - l)) / (x - l));
+  }
+}
+
+static void set_lum(double& r, double& g, double& b, double l)
+{
+  double d = l - lum(r, g, b);
+  r += d;
+  g += d;
+  b += d;
+  clip_color(r, g, b);
+}
+
+// TODO replace this with a better impl (and test this, not sure if it's correct)
+static void set_sat(double& r, double& g, double& b, double s)
+{
+#undef MIN
+#undef MAX
+#undef MID
+#define MIN(x,y)     (((x) < (y)) ? (x) : (y))
+#define MAX(x,y)     (((x) > (y)) ? (x) : (y))
+#define MID(x,y,z)   ((x) > (y) ? ((y) > (z) ? (y) : ((x) > (z) ?    \
+                       (z) : (x))) : ((y) > (z) ? ((z) > (x) ? (z) : \
+                       (x)): (y)))
+
+  double& min = MIN(r, MIN(g, b));
+  double& mid = MID(r, g, b);
+  double& max = MAX(r, MAX(g, b));
+
+  if (max > min) {
+    mid = ((mid - min)*s) / (max - min);
+    max = s;
+  }
+  else
+    mid = max = 0;
+
+  min = 0;
+}
+
+// TODO replace this with a better impl (and test this, not sure if it's correct)
+static void set_sat2(double* r, double* g, double* b, double s)
+{
+  double *tmp;
+
+#define SWAP(x,y)  if (!((*x) < (*y))) { tmp = (x); (x) = (y); (y) = tmp; }
+  double *min = r;
+  double *mid = g;
+  double *max = b;
+  SWAP(min, mid);
+  SWAP(min, max);
+  SWAP(mid, max);
+  printf("min:%f mid:%f max:%f", *min, *mid, *max);
+
+  if (*max > *min) {
+    *mid = ((*mid - *min) * s) / (*max - *min);
+    *max = s;
+  }
+  else
+    *mid = *max = 0;
+
+  *min = 0;
+
+#undef SWAP
+}
+
+// -------
+
+color_t rgba_blender_hsl_saturation(color_t backdrop, color_t src, int opacity)
+{
+  double r = rgba_getr(src)/255.0;
+  double g = rgba_getg(src)/255.0;
+  double b = rgba_getb(src)/255.0;
+  printf("src: %f %f %f\n", r, g, b);
+  double s = sat(r, g, b);
+  printf("sat: %f\n", s);
+
+  r = rgba_getr(backdrop)/255.0;
+  g = rgba_getg(backdrop)/255.0;
+  b = rgba_getb(backdrop)/255.0;
+  printf("back: %f %f %f\n", r, g, b);
+  double l = lum(r, g, b);
+  printf("lum: %f\n", l);
+
+  set_sat2(&r, &g, &b, s);
+  printf("applied sat: %f %f %f\n", r, g, b);
+  set_lum(r, g, b, l);
+  printf("applied lum: %f %f %f\n", r, g, b);
+
+  src = rgba(int(255.0*r), int(255.0*g), int(255.0*b), 0) | (src & rgba_a_mask);
+  printf("final src: %d %d %d %d\n", rgba_getr(src), rgba_getg(src),
+        rgba_getb(src), rgba_geta(src));
+  return rgba_blender_normal(backdrop, src, opacity);
+}
+
+RGBA_BLENDER_N(hsl_saturation);
+
+void test_hsl_saturation() {
+    // let back = Rgba([81, 81, 163, 129]);
+    // let src = Rgba([50, 104, 58, 189]);
+    color_t back = rgba(81, 81, 163, 129);
+    color_t pixel = rgba(50, 104, 58, 189);
+
+    color_t result = rgba_blender_hsl_saturation(back, pixel, 255);
+    printf("%d %d %d %d\n", rgba_getr(result), rgba_getg(result),
+        rgba_getb(result), rgba_geta(result));
+    result = rgba_blender_hsl_saturation_n(back, pixel, 255);
+    printf("%d %d %d %d\n", rgba_getr(result), rgba_getg(result),
+        rgba_getb(result), rgba_geta(result));
+}
+
+
+int main(int argc, char* argv[]) {
+    test_hsl_saturation();
 }

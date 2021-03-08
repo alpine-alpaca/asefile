@@ -207,26 +207,67 @@ fn blend_color_dodge() {
 
 #[test]
 fn blend_color_burn() {
-    let f = load_test_file("blend_colorburn");
-
-    assert_eq!(f.num_frames, 1);
-    assert_eq!((f.width, f.height), (256, 256));
-    assert_eq!(f.num_layers(), 2);
-    assert_eq!(f.pixel_format, PixelFormat::Rgba);
-
-    compare_with_reference_image(f.frame(0).image(), "blend_colorburn");
+    blend_test("blend_colorburn");
 }
 
 #[test]
 fn blend_hard_light() {
-    let f = load_test_file("blend_hardlight");
+    blend_test("blend_hardlight");
+}
 
-    assert_eq!(f.num_frames, 1);
-    assert_eq!((f.width, f.height), (256, 256));
-    assert_eq!(f.num_layers(), 2);
-    assert_eq!(f.pixel_format, PixelFormat::Rgba);
+#[test]
+fn blend_soft_light() {
+    blend_test("blend_softlight");
+}
 
-    compare_with_reference_image(f.frame(0).image(), "blend_hardlight");
+fn blend_test(name: &str) {
+    let f = load_test_file(name);
+    compare_with_reference_image(f.frame(0).image(), name);
+}
+
+#[test]
+fn blend_divide() {
+    blend_test("blend_divide");
+}
+
+#[test]
+fn blend_difference() {
+    blend_test("blend_difference");
+}
+
+#[test]
+fn blend_exclusion() {
+    blend_test("blend_exclusion");
+}
+
+#[test]
+fn blend_addition() {
+    blend_test("blend_addition");
+}
+
+#[test]
+fn blend_subtract() {
+    blend_test("blend_subtract");
+}
+
+#[test]
+fn blend_hue() {
+    blend_test("blend_hue");
+}
+
+#[test]
+fn blend_saturation() {
+    blend_test("blend_saturation");
+}
+
+#[test]
+fn blend_color() {
+    blend_test("blend_color");
+}
+
+#[test]
+fn blend_luminosity() {
+    blend_test("blend_luminosity");
 }
 
 #[test]

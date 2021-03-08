@@ -1,3 +1,5 @@
+use std::usize;
+
 use image::Rgba;
 // based on https://github.com/aseprite/aseprite/blob/master/src/doc/blend_funcs.cpp
 
@@ -57,6 +59,8 @@ pub(crate) fn normal(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
     from_rgba_i32(res_r, res_g, res_b, res_a)
 }
 
+// --- Utilities / generic functions -------------------------------------------
+
 /*
   if (backdrop & rgba_a_mask) {                                                 \
     color_t normal = rgba_blender_normal(backdrop, src, opacity);               \
@@ -70,12 +74,7 @@ pub(crate) fn normal(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
   }                                                                             \
   else                                                                          \
     return rgba_blender_normal(backdrop, src, opacity);                         \
-
 */
-pub(crate) fn multiply(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
-    blender(backdrop, src, opacity, multiply_baseline)
-}
-
 fn blender<F>(backdrop: Color8, src: Color8, opacity: u8, f: F) -> Color8
 where
     F: Fn(Color8, Color8, u8) -> Color8,
@@ -115,6 +114,12 @@ where
     normal(backdrop, src, opacity)
 }
 
+// --- multiply ----------------------------------------------------------------
+
+pub(crate) fn multiply(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
+    blender(backdrop, src, opacity, multiply_baseline)
+}
+
 fn multiply_baseline(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
     blend_channel(backdrop, src, opacity, blend_multiply)
 }
@@ -122,6 +127,8 @@ fn multiply_baseline(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
 fn blend_multiply(a: i32, b: i32) -> u8 {
     mul_un8(a, b)
 }
+
+// --- screen ------------------------------------------------------------------
 
 pub(crate) fn screen(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
     blender(backdrop, src, opacity, screen_baseline)
@@ -135,6 +142,8 @@ fn screen_baseline(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
 fn blend_screen(a: i32, b: i32) -> u8 {
     (a + b - mul_un8(a, b) as i32) as u8
 }
+
+// --- overlay -----------------------------------------------------------------
 
 pub(crate) fn overlay(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
     blender(backdrop, src, opacity, overlay_baseline)
@@ -153,13 +162,7 @@ fn blend_overlay(b: i32, s: i32) -> u8 {
     blend_hard_light(s, b)
 }
 
-fn blend_hard_light(b: i32, s: i32) -> u8 {
-    if s < 128 {
-        blend_multiply(b, s << 1)
-    } else {
-        blend_screen(b, (s << 1) - 255)
-    }
-}
+// --- darken ------------------------------------------------------------------
 
 pub(crate) fn darken(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
     blender(backdrop, src, opacity, darken_baseline)
@@ -173,6 +176,8 @@ fn blend_darken(b: i32, s: i32) -> u8 {
     b.min(s) as u8
 }
 
+// --- lighten -----------------------------------------------------------------
+
 pub(crate) fn lighten(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
     blender(backdrop, src, opacity, lighten_baseline)
 }
@@ -184,6 +189,8 @@ fn lighten_baseline(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
 fn blend_lighten(b: i32, s: i32) -> u8 {
     b.max(s) as u8
 }
+
+// --- color_dodge -------------------------------------------------------------
 
 pub(crate) fn color_dodge(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
     blender(backdrop, src, opacity, color_dodge_baseline)
@@ -206,6 +213,8 @@ fn blend_color_dodge(b: i32, s: i32) -> u8 {
     }
 }
 
+// --- color_burn --------------------------------------------------------------
+
 pub(crate) fn color_burn(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
     blender(backdrop, src, opacity, color_burn_baseline)
 }
@@ -227,6 +236,8 @@ fn blend_color_burn(b: i32, s: i32) -> u8 {
     }
 }
 
+// --- hard_light --------------------------------------------------------------
+
 pub(crate) fn hard_light(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
     blender(backdrop, src, opacity, hard_light_baseline)
 }
@@ -235,9 +246,451 @@ fn hard_light_baseline(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
     blend_channel(backdrop, src, opacity, blend_hard_light)
 }
 
+fn blend_hard_light(b: i32, s: i32) -> u8 {
+    if s < 128 {
+        blend_multiply(b, s << 1)
+    } else {
+        blend_screen(b, (s << 1) - 255)
+    }
+}
+
+// --- soft_light --------------------------------------------------------------
+
+pub(crate) fn soft_light(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
+    blender(backdrop, src, opacity, soft_light_baseline)
+}
+
+fn soft_light_baseline(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
+    let (back_r, back_g, back_b, _) = as_rgba_i32(backdrop);
+    let (src_r, src_g, src_b, src_a) = as_rgba_i32(src);
+    let r = blend_soft_light(back_r, src_r);
+    let g = blend_soft_light(back_g, src_g);
+    let b = blend_soft_light(back_b, src_b);
+
+    let src = from_rgba_i32(r, g, b, src_a);
+
+    normal(backdrop, src, opacity)
+}
+
+fn blend_soft_light(b: i32, s: i32) -> i32 {
+    // The original uses double, but since inputs & output are only 8 bits using
+    // f32 should actually be enough.
+    let b: f64 = b as f64 / 255.0;
+    let s: f64 = s as f64 / 255.0;
+
+    let d = if b <= 0.25 {
+        ((16.0 * b - 12.0) * b + 4.0) * b
+    } else {
+        b.sqrt()
+    };
+
+    let r = if s <= 0.5 {
+        b - (1.0 - 2.0 * s) * b * (1.0 - b)
+    } else {
+        b + (2.0 * s - 1.0) * (d - b)
+    };
+
+    (r * 255.0 + 0.5) as u32 as i32
+}
+
+// --- divide ------------------------------------------------------------------
+
+pub(crate) fn divide(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
+    blender(backdrop, src, opacity, divide_baseline)
+}
+
+fn divide_baseline(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
+    blend_channel(backdrop, src, opacity, blend_divide)
+}
+
+fn blend_divide(b: i32, s: i32) -> u8 {
+    if b == 0 {
+        0
+    } else if b >= s {
+        255
+    } else {
+        div_un8(b, s)
+    }
+}
+
+// --- difference ------------------------------------------------------------------
+
+pub(crate) fn difference(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
+    blender(backdrop, src, opacity, difference_baseline)
+}
+
+fn difference_baseline(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
+    blend_channel(backdrop, src, opacity, blend_difference)
+}
+
+fn blend_difference(b: i32, s: i32) -> u8 {
+    (b - s).abs() as u8
+}
+
+// --- exclusion ---------------------------------------------------------------
+
+pub(crate) fn exclusion(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
+    blender(backdrop, src, opacity, exclusion_baseline)
+}
+
+fn exclusion_baseline(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
+    blend_channel(backdrop, src, opacity, blend_exclusion)
+}
+
+// blend_exclusion(b, s, t)  ((t) = MUL_UN8((b), (s), (t)), ((b) + (s) - 2*(t)))
+fn blend_exclusion(b: i32, s: i32) -> u8 {
+    let t = mul_un8(b, s) as i32;
+    (b + s - 2 * t) as u8
+}
+
+// --- addition ----------------------------------------------------------------
+
+pub(crate) fn addition(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
+    blender(backdrop, src, opacity, addition_baseline)
+}
+
+fn addition_baseline(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
+    let (back_r, back_g, back_b, _) = as_rgba_i32(backdrop);
+    let (src_r, src_g, src_b, src_a) = as_rgba_i32(src);
+    let r = back_r + src_r;
+    let g = back_g + src_g;
+    let b = back_b + src_b;
+
+    let src = from_rgba_i32(r.min(255), g.min(255), b.min(255), src_a);
+
+    normal(backdrop, src, opacity)
+}
+
+// --- subtract ----------------------------------------------------------------
+
+pub(crate) fn subtract(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
+    blender(backdrop, src, opacity, subtract_baseline)
+}
+
+fn subtract_baseline(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
+    let (back_r, back_g, back_b, _) = as_rgba_i32(backdrop);
+    let (src_r, src_g, src_b, src_a) = as_rgba_i32(src);
+    let r = back_r - src_r;
+    let g = back_g - src_g;
+    let b = back_b - src_b;
+
+    let src = from_rgba_i32(r.max(0), g.max(0), b.max(0), src_a);
+
+    normal(backdrop, src, opacity)
+}
+
+// --- hsl_hue -----------------------------------------------------------------
+
+pub(crate) fn hsl_hue(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
+    blender(backdrop, src, opacity, hsl_hue_baseline)
+}
+
+fn hsl_hue_baseline(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
+    let (r, g, b) = as_rgb_f64(backdrop);
+    let sat = saturation(r, g, b);
+    let lum = luminosity(r, g, b);
+
+    let (r, g, b) = as_rgb_f64(src);
+
+    let (r, g, b) = set_saturation(r, g, b, sat);
+    let (r, g, b) = set_luminocity(r, g, b, lum);
+
+    let src = from_rgb_f64(r, g, b, src[3]);
+
+    normal(backdrop, src, opacity)
+}
+
+// --- hsl_saturation ----------------------------------------------------------
+
+pub(crate) fn hsl_saturation(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
+    blender(backdrop, src, opacity, hsl_saturation_baseline)
+}
+
+fn hsl_saturation_baseline(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
+    //dbg!(backdrop, src);
+    let (r, g, b) = as_rgb_f64(src);
+    //dbg!("src", (r, g, b));
+    let sat = saturation(r, g, b);
+    //dbg!(sat);
+
+    let (r, g, b) = as_rgb_f64(backdrop);
+    //dbg!("back", (r, g, b));
+    let lum = luminosity(r, g, b);
+    //dbg!(lum);
+
+    let (r, g, b) = set_saturation(r, g, b, sat);
+    //dbg!("sat", (r, g, b));
+    let (r, g, b) = set_luminocity(r, g, b, lum);
+
+    //dbg!((r, g, b), saturation(r, g, b), luminosity(r, g, b));
+
+    let src = from_rgb_f64(r, g, b, src[3]);
+    // dbg!(src);
+    normal(backdrop, src, opacity)
+}
+
+#[test]
+fn test_hsl_saturation() {
+    let back = Rgba([81, 81, 163, 129]);
+    let src = Rgba([50, 104, 58, 189]);
+    let res = hsl_saturation(back, src, 255);
+    assert_eq!(res, Rgba([107, 74, 107, 222]));
+}
+
+// --- hsl_color ---------------------------------------------------------------
+
+pub(crate) fn hsl_color(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
+    blender(backdrop, src, opacity, hsl_color_baseline)
+}
+
+fn hsl_color_baseline(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
+    let (r, g, b) = as_rgb_f64(backdrop);
+    let lum = luminosity(r, g, b);
+
+    let (r, g, b) = as_rgb_f64(src);
+
+    let (r, g, b) = set_luminocity(r, g, b, lum);
+
+    let src = from_rgb_f64(r, g, b, src[3]);
+    normal(backdrop, src, opacity)
+}
+
+// --- hsl_luminosity ----------------------------------------------------------
+
+pub(crate) fn hsl_luminosity(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
+    blender(backdrop, src, opacity, hsl_luminosity_baseline)
+}
+
+fn hsl_luminosity_baseline(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
+    let (r, g, b) = as_rgb_f64(src);
+    let lum = luminosity(r, g, b);
+
+    let (r, g, b) = as_rgb_f64(backdrop);
+
+    let (r, g, b) = set_luminocity(r, g, b, lum);
+
+    let src = from_rgb_f64(r, g, b, src[3]);
+
+    normal(backdrop, src, opacity)
+}
+
+// --- Hue/Saturation/Luminance Utils ------------------------------------------
+
+fn saturation(r: f64, g: f64, b: f64) -> f64 {
+    r.max(g.max(b)) - r.min(g.min(b))
+}
+
+fn luminosity(r: f64, g: f64, b: f64) -> f64 {
+    0.3 * r + 0.59 * g + 0.11 * b
+}
+
+fn set_luminocity(r: f64, g: f64, b: f64, lum: f64) -> (f64, f64, f64) {
+    let delta = lum - luminosity(r, g, b);
+    clip_color(r + delta, g + delta, b + delta)
+}
+
+fn clip_color(mut r: f64, mut g: f64, mut b: f64) -> (f64, f64, f64) {
+    let l = luminosity(r, g, b);
+    let n = r.min(g.min(b));
+    let x = r.max(g.max(b));
+
+    if n < 0.0 {
+        r = l + (((r - l) * l) / (l - n));
+        g = l + (((g - l) * l) / (l - n));
+        b = l + (((b - l) * l) / (l - n));
+    }
+
+    if x > 1.0 {
+        r = l + (((r - l) * (1.0 - l)) / (x - l));
+        g = l + (((g - l) * (1.0 - l)) / (x - l));
+        b = l + (((b - l) * (1.0 - l)) / (x - l));
+    }
+    (r, g, b)
+}
+
+// Returns (smallest, middle, highest) where smallest is the index
+// of the smallest element. I.e., 0 if it's `r`, 1 if it's `g`, etc.
+//
+// Implements this static sorting network. Vertical lines are swaps.
+//
+//  r --*--*----- min
+//      |  |
+//  g --*--|--*-- mid
+//         |  |
+//  b -----*--*-- max
+//
+fn static_sort3(r: f64, g: f64, b: f64) -> (usize, usize, usize) {
+    let (min0, mid0, max0) = ((r, 0), (g, 1), (b, 2));
+    // dbg!("--------");
+    // dbg!(min0, mid0, max0);
+    let (min1, mid1) = if min0.0 < mid0.0 {
+        (min0, mid0)
+    } else {
+        (mid0, min0)
+    };
+    // dbg!(min1, mid1);
+    let (min2, max1) = if min1.0 < max0.0 {
+        (min1, max0)
+    } else {
+        (max0, min1)
+    };
+    // dbg!(min2, max1);
+    let (mid2, max2) = if mid1.0 < max1.0 {
+        (mid1, max1)
+    } else {
+        (max1, mid1)
+    };
+    // dbg!(mid2, max2);
+    (min2.1, mid2.1, max2.1)
+}
+
+// Array based implementation as a reference for testing.
+#[cfg(test)]
+fn static_sort3_spec(r: f64, g: f64, b: f64) -> (usize, usize, usize) {
+    let mut inp = [(r, 0), (g, 1), (b, 2)];
+    inp.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+    let res: Vec<usize> = inp.iter().map(|p| p.1).collect();
+    //dbg!(r, g, b);
+    (res[0], res[1], res[2])
+}
+
+#[test]
+fn test_static_sort3() {
+    let (r, g, b) = (2.0, 3.0, 4.0);
+    assert_eq!(static_sort3(r, g, b), static_sort3_spec(r, g, b));
+    let (r, g, b) = (2.0, 4.0, 3.0);
+    assert_eq!(static_sort3(r, g, b), static_sort3_spec(r, g, b));
+    let (r, g, b) = (3.0, 2.0, 4.0);
+    assert_eq!(static_sort3(r, g, b), static_sort3_spec(r, g, b));
+    let (r, g, b) = (3.0, 4.0, 2.0);
+    assert_eq!(static_sort3(r, g, b), static_sort3_spec(r, g, b));
+    let (r, g, b) = (4.0, 2.0, 3.0);
+    assert_eq!(static_sort3(r, g, b), static_sort3_spec(r, g, b));
+    let (r, g, b) = (4.0, 3.0, 2.0);
+    assert_eq!(static_sort3(r, g, b), static_sort3_spec(r, g, b));
+}
+
+// implementation used in Aseprite, even though it uses a lot of compares.
+fn static_sort3_orig(r: f64, g: f64, b: f64) -> (usize, usize, usize) {
+    // min = MIN(r, MIN(g, b));
+    // ((r) < (((g) < (b)) ? (g) : (b))) ? (r) : (((g) < (b)) ? (g) : (b));
+    // max = MAX(r, MAX(g, b));
+    // ((r) > (((g) > (b)) ? (g) : (b))) ? (r) : (((g) > (b)) ? (g) : (b))
+    // mid = ((r) > (g) ?
+    //          ((g) > (b) ?
+    //             (g) :
+    //             ((r) > (b) ?
+    //                (b) :
+    //                (r)
+    //             )
+    //          ) :
+    //          ((g) > (b) ?
+    //             ((b) > (r) ?
+    //                (b) :
+    //                (r)
+    //             ) :
+    //             (g)))
+
+    let min = if r < g.min(b) {
+        0 // r
+    } else if g < b {
+        1 // g
+    } else {
+        2 // b
+    };
+    let max = if r > g.max(b) {
+        0 // r
+    } else if g > b {
+        1 // g
+    } else {
+        2 // b
+    };
+    let mid = if r > g {
+        if g > b {
+            1 // g
+        } else {
+            if r > b {
+                2 // b
+            } else {
+                0 // r
+            }
+        }
+    } else {
+        if g > b {
+            if b > r {
+                2 // b
+            } else {
+                0 // r
+            }
+        } else {
+            1 // g
+        }
+    };
+    (min, mid, max)
+}
+
+fn set_saturation(r: f64, g: f64, b: f64, sat: f64) -> (f64, f64, f64) {
+    let mut col = [r, g, b];
+    let (min, mid, max) = static_sort3_orig(r, g, b);
+    //dbg!((min, mid, max), (col[min], col[mid], col[max]));
+    //let (min, mid, max) = static_sort3(r, g, b);
+    //dbg!((min, mid, max), (col[min], col[mid], col[max]));
+    if col[max] > col[min] {
+        // they're not all the same
+        col[mid] = ((col[mid] - col[min]) * sat) / (col[max] - col[min]);
+        col[max] = sat;
+    //dbg!(col[mid], col[max]);
+    } else {
+        col[mid] = 0.0;
+        col[max] = 0.0;
+    }
+    col[min] = 0.0;
+    //dbg!(col);
+    (col[0], col[1], col[2])
+}
+
+// This test actually fails because Aseprite's version fails this test.
+// #[test]
+fn test_set_saturation() {
+    // Test that:
+    //
+    //     saturation(set_saturation(r, g, b, s) == s)
+    //
+    // (unless saturation(r, g, b) == 0, i.e., they're all the same color)
+    let steps = [0.0_f64, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
+    for r in steps.iter().cloned() {
+        for g in steps.iter().cloned() {
+            for b in steps.iter().cloned() {
+                for sat in steps.iter().cloned() {
+                    let (r1, g1, b1) = set_saturation(r, g, b, sat);
+                    let sat0 = saturation(r, g, b);
+                    let sat1 = saturation(r1, g1, b1);
+                    if !(r == g && g == b) {
+                        if (sat1 - sat).abs() > 0.00001 {
+                            panic!(
+                                "set_saturation({}, {}, {}, {}) => ({}, {}, {}) => sat: {} (input sat: {})",
+                                r, g, b, sat, r1, g1, b1, sat1, sat0
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// --- rgba utils --------------------------------------------------------------
+
 fn as_rgba_i32(color: Color8) -> (i32, i32, i32, i32) {
     let [r, g, b, a] = color.0;
     (r as i32, g as i32, b as i32, a as i32)
+}
+
+fn as_rgb_f64(color: Color8) -> (f64, f64, f64) {
+    let r = color[0] as f64 / 255.0;
+    let g = color[1] as f64 / 255.0;
+    let b = color[2] as f64 / 255.0;
+    (r, g, b)
 }
 
 fn from_rgba_i32(r: i32, g: i32, b: i32, a: i32) -> Color8 {
@@ -245,7 +698,17 @@ fn from_rgba_i32(r: i32, g: i32, b: i32, a: i32) -> Color8 {
     debug_assert!(g >= 0 && g <= 255);
     debug_assert!(b >= 0 && b <= 255);
     debug_assert!(a >= 0 && a <= 255);
+
     Rgba([r as u8, g as u8, b as u8, a as u8])
+}
+
+fn from_rgb_f64(r: f64, g: f64, b: f64, a: u8) -> Color8 {
+    from_rgba_i32(
+        (r * 255.0) as i32,
+        (g * 255.0) as i32,
+        (b * 255.0) as i32,
+        a as i32,
+    )
 }
 
 /*
