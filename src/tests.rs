@@ -134,6 +134,18 @@ fn blend_normal() {
 }
 
 #[test]
+fn blend_multiply() {
+    let f = load_test_file("blend_multiply");
+
+    assert_eq!(f.num_frames, 1);
+    assert_eq!((f.width, f.height), (256, 256));
+    assert_eq!(f.num_layers(), 2);
+    assert_eq!(f.pixel_format, PixelFormat::Rgba);
+
+    compare_with_reference_image(f.frame(0).image(), "blend_multiply");
+}
+
+#[test]
 fn single_layer() {
     let f = load_test_file("layers_and_tags");
 

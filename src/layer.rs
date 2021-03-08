@@ -142,6 +142,10 @@ impl Index<u32> for LayersData {
 
 /// Describes how the pixels from two layers are combined.
 /// See also [Blend modes (Wikipedia)](https://en.wikipedia.org/wiki/Blend_modes)
+///
+/// Blend modes use Aseprite's "new layer blending method", i.e., we assume that
+/// the source Aseprite has a checkmark under "Edit > Preferences > Experimental >
+/// New Layer Blending Method (#1096)". This is the default as of Aseprite 1.2.25.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BlendMode {
     Normal,

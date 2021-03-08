@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    blend,
+    blend::{self, Color8},
     cel::CelsData,
     layer::{Layer, LayersData},
 };
@@ -185,6 +185,8 @@ impl AsepriteFile {
 
     fn copy_cel(&self, image: &mut RgbaImage, cel: &RawCel) {
         assert!(self.pixel_format == PixelFormat::Rgba);
+        let layer = self.layer(cel.layer_index as u32);
+        let blend_fn = blend_mode_to_blend_fn(layer.blend_mode());
         match &cel.data {
             CelData::Linked(frame) => {
                 //assert!(false, "NYI: Linked Cels"),
@@ -206,6 +208,7 @@ impl AsepriteFile {
                                 *height as i32,
                                 cel.opacity,
                                 &data.0,
+                                &blend_fn,
                             );
                         }
                     }
@@ -224,6 +227,7 @@ impl AsepriteFile {
                     *height as i32,
                     cel.opacity,
                     &data.0,
+                    &blend_fn,
                 );
             }
         }
@@ -289,6 +293,16 @@ impl<'a> Frame<'a> {
     }
 }
 
+type BlendFn = Box<dyn Fn(Color8, Color8, u8) -> Color8>;
+
+fn blend_mode_to_blend_fn(mode: BlendMode) -> BlendFn {
+    match mode {
+        BlendMode::Normal => Box::new(blend::normal),
+        BlendMode::Multiply => Box::new(blend::multiply),
+        _ => panic!("Unsupported blend mode: {:?}", mode),
+    }
+}
+
 fn copy_cel_to_image(
     image: &mut RgbaImage,
     x0: i32,
@@ -297,6 +311,7 @@ fn copy_cel_to_image(
     height: i32,
     opacity: u8,
     rgba_data: &[u8],
+    blend_func: &BlendFn,
 ) {
     let x_end = x0 + width;
     let y_end = y0 + height;
@@ -329,7 +344,7 @@ fn copy_cel_to_image(
             );
 
             let src = *image.get_pixel(x as u32, y as u32);
-            let new = blend::normal(src, pixel, opacity);
+            let new = blend_func(src, pixel, opacity);
             image.put_pixel(x as u32, y as u32, new);
 
             // let new = image.get_pixel(x as u32, y as u32);

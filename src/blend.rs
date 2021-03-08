@@ -33,6 +33,7 @@ pub(crate) fn merge(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
     }
 }
 
+// based on: rgba_blender_normal(color_t backdrop, color_t src, int opacity)
 pub(crate) fn normal(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
     let (back_r, back_g, back_b, back_a) = as_rgba_i32(backdrop);
     let (src_r, src_g, src_b, src_a) = as_rgba_i32(src);
@@ -54,6 +55,58 @@ pub(crate) fn normal(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
     let res_b = back_b + ((src_b - back_b) * src_a) / res_a;
 
     from_rgba_i32(res_r, res_g, res_b, res_a)
+}
+
+/*
+  if (backdrop & rgba_a_mask) {                                                 \
+    color_t normal = rgba_blender_normal(backdrop, src, opacity);               \
+    color_t blend = rgba_blender_##name(backdrop, src, opacity);                \
+    int Ba = rgba_geta(backdrop);                                               \
+    color_t normalToBlendMerge = rgba_blender_merge(normal, blend, Ba);         \
+    int t;                                                                      \
+    int srcTotalAlpha = MUL_UN8(rgba_geta(src), opacity, t);                    \
+    int compositeAlpha = MUL_UN8(Ba, srcTotalAlpha, t);                         \
+    return rgba_blender_merge(normalToBlendMerge, blend, compositeAlpha);       \
+  }                                                                             \
+  else                                                                          \
+    return rgba_blender_normal(backdrop, src, opacity);                         \
+
+*/
+pub(crate) fn multiply(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
+    if backdrop[3] != 0 {
+        let norm = normal(backdrop, src, opacity);
+        let blend = multiply_baseline(backdrop, src, opacity);
+        let back_alpha = backdrop[3];
+        let normal_to_blend_merge = merge(norm, blend, back_alpha);
+        let src_total_alpha = mul_un8(src[3] as i32, opacity as i32);
+        let composite_alpha = mul_un8(back_alpha as i32, src_total_alpha as i32);
+        merge(normal_to_blend_merge, blend, composite_alpha)
+    //todo!()
+    } else {
+        normal(backdrop, src, opacity)
+    }
+}
+
+/*
+  int t;
+  int r = blend_multiply(rgba_getr(backdrop), rgba_getr(src), t);
+  int g = blend_multiply(rgba_getg(backdrop), rgba_getg(src), t);
+  int b = blend_multiply(rgba_getb(backdrop), rgba_getb(src), t);
+  src = rgba(r, g, b, 0) | (src & rgba_a_mask);
+  return rgba_blender_normal(backdrop, src, opacity);
+*/
+pub(crate) fn multiply_baseline(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
+    let (back_r, back_g, back_b, _) = as_rgba_i32(backdrop);
+    let (src_r, src_g, src_b, _) = as_rgba_i32(src);
+    let r = blend_multiply(back_r, src_r);
+    let g = blend_multiply(back_g, src_g);
+    let b = blend_multiply(back_b, src_b);
+    let src = Rgba([r, g, b, src[3]]);
+    normal(backdrop, src, opacity)
+}
+
+fn blend_multiply(a: i32, b: i32) -> u8 {
+    mul_un8(a, b)
 }
 
 fn as_rgba_i32(color: Color8) -> (i32, i32, i32, i32) {
