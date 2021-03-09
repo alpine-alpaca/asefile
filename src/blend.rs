@@ -1,7 +1,14 @@
 use std::usize;
 
 use image::Rgba;
-// based on https://github.com/aseprite/aseprite/blob/master/src/doc/blend_funcs.cpp
+
+// Rust port of Aseprite's blend functions:
+// https://github.com/aseprite/aseprite/blob/master/src/doc/blend_funcs.cpp
+//
+// Further references:
+//  - http://www.simplefilter.de/en/basics/mixmods.html
+//  - PDF Blend Modes addendum: https://www.adobe.com/content/dam/acom/en/devnet/pdf/pdf_reference_archive/blend_modes.pdf
+//  - Pixman source: https://github.com/servo/pixman/blob/master/pixman/pixman-combine-float.c
 
 pub type Color8 = Rgba<u8>;
 
@@ -429,14 +436,6 @@ fn hsl_saturation_baseline(backdrop: Color8, src: Color8, opacity: u8) -> Color8
     normal(backdrop, src, opacity)
 }
 
-#[test]
-fn test_hsl_saturation() {
-    let back = Rgba([81, 81, 163, 129]);
-    let src = Rgba([50, 104, 58, 189]);
-    let res = hsl_saturation(back, src, 255);
-    assert_eq!(res, Rgba([107, 74, 107, 222]));
-}
-
 // --- hsl_color ---------------------------------------------------------------
 
 pub(crate) fn hsl_color(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
@@ -476,6 +475,10 @@ fn hsl_luminosity_baseline(backdrop: Color8, src: Color8, opacity: u8) -> Color8
 
 // --- Hue/Saturation/Luminance Utils ------------------------------------------
 
+// this is actually chroma, but this is how the Aseprite's blend functions
+// define it, which in turn come from pixman, which in turn are the
+// PDF nonseperable blend modes which are specified in the "PDF Blend Modes:
+// Addendum" by Adobe.
 fn saturation(r: f64, g: f64, b: f64) -> f64 {
     r.max(g.max(b)) - r.min(g.min(b))
 }
@@ -570,7 +573,8 @@ fn test_static_sort3() {
     assert_eq!(static_sort3(r, g, b), static_sort3_spec(r, g, b));
 }
 
-// implementation used in Aseprite, even though it uses a lot of compares.
+// implementation used in Aseprite, even though it uses a lot of compares and
+// is actually broken if r == g  and g < b.
 fn static_sort3_orig(r: f64, g: f64, b: f64) -> (usize, usize, usize) {
     // min = MIN(r, MIN(g, b));
     // ((r) < (((g) < (b)) ? (g) : (b))) ? (r) : (((g) < (b)) ? (g) : (b));
@@ -629,29 +633,36 @@ fn static_sort3_orig(r: f64, g: f64, b: f64) -> (usize, usize, usize) {
     (min, mid, max)
 }
 
+// Ensure that we produce the same output as Aseprite, even though it's wrong.
+const ASEPRITE_SATURATION_BUG_COMPATIBLE: bool = true;
+
 fn set_saturation(r: f64, g: f64, b: f64, sat: f64) -> (f64, f64, f64) {
     let mut col = [r, g, b];
-    let (min, mid, max) = static_sort3_orig(r, g, b);
-    //dbg!((min, mid, max), (col[min], col[mid], col[max]));
-    //let (min, mid, max) = static_sort3(r, g, b);
-    //dbg!((min, mid, max), (col[min], col[mid], col[max]));
+
+    let (min, mid, max) = if ASEPRITE_SATURATION_BUG_COMPATIBLE {
+        static_sort3_orig(r, g, b)
+    } else {
+        static_sort3(r, g, b)
+    };
     if col[max] > col[min] {
-        // they're not all the same
+        // i.e., they're not all the same
         col[mid] = ((col[mid] - col[min]) * sat) / (col[max] - col[min]);
         col[max] = sat;
-    //dbg!(col[mid], col[max]);
     } else {
         col[mid] = 0.0;
         col[max] = 0.0;
     }
     col[min] = 0.0;
-    //dbg!(col);
     (col[0], col[1], col[2])
 }
 
 // This test actually fails because Aseprite's version fails this test.
-// #[test]
+#[test]
 fn test_set_saturation() {
+    if ASEPRITE_SATURATION_BUG_COMPATIBLE {
+        // This fails for the Aseprite implementation
+        return;
+    }
     // Test that:
     //
     //     saturation(set_saturation(r, g, b, s) == s)
@@ -662,13 +673,25 @@ fn test_set_saturation() {
         for g in steps.iter().cloned() {
             for b in steps.iter().cloned() {
                 for sat in steps.iter().cloned() {
-                    let (r1, g1, b1) = set_saturation(r, g, b, sat);
                     let sat0 = saturation(r, g, b);
+                    println!(
+                        "* x = ({:.3}, {:.3}, {:.3}); x.sat() = {:.5}",
+                        r, g, b, sat0
+                    );
+                    let (r1, g1, b1) = set_saturation(r, g, b, sat);
                     let sat1 = saturation(r1, g1, b1);
+                    println!(
+                        "  y = x.set_sat({:.5}); y = ({:.3}, {:.3}, {:.3}), y.sat() = {:.5}",
+                        sat, r1, g1, b1, sat1
+                    );
+
+                    // println!("set_saturation({:.3}, {:.3}, {:.3}, {:.3}) => ({:.3}, {:.3}, {:.3}) => sat: {:.5} (input sat: {:.5})",
+                    // r, g, b, sat, r1, g1, b1, sat1, sat0);
+
                     if !(r == g && g == b) {
                         if (sat1 - sat).abs() > 0.00001 {
                             panic!(
-                                "set_saturation({}, {}, {}, {}) => ({}, {}, {}) => sat: {} (input sat: {})",
+                                "set_saturation({:.3}, {:.3}, {:.3}, {:.3}) => ({:.3}, {:.3}, {:.3}) => sat: {:.5} (input sat: {:.5})",
                                 r, g, b, sat, r1, g1, b1, sat1, sat0
                             );
                         }

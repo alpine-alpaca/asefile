@@ -261,6 +261,11 @@ fn blend_saturation() {
 }
 
 #[test]
+fn blend_saturation_bug() {
+    blend_test("blend_saturation_bug");
+}
+
+#[test]
 fn blend_color() {
     blend_test("blend_color");
 }
