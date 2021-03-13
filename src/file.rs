@@ -87,8 +87,8 @@ impl AsepriteFile {
     }
 
     /// Number of animation frames.
-    pub fn num_frames(&self) -> usize {
-        self.num_frames as usize
+    pub fn num_frames(&self) -> u32 {
+        self.num_frames as u32
     }
 
     /// Number of layers.

@@ -5,3 +5,4 @@ tests/data/*.actual.png
 tests/data/example*.png
 ref/*.exe
 ref/a.out
+examples/*/*.png

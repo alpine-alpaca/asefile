@@ -105,7 +105,7 @@ impl<'a> Layer<'a> {
 
     /// Get a reference to the Cel for this frame in the layer.
     pub fn frame(&self, frame_id: u32) -> Cel {
-        assert!((frame_id as usize) < self.file.num_frames());
+        assert!(frame_id < self.file.num_frames());
         Cel {
             file: self.file,
             layer: self.layer_id as u32,
