@@ -12,3 +12,31 @@ also use it to build your own asset pipelines.
 
 [Documentation](https://docs.rs/asefile/)
 
+# Example
+
+```rust
+use std::path::Path;
+
+use asefile::AsepriteFile;
+use image::{self, ImageFormat};
+
+fn main() {
+    let file = Path::new("input.aseprite");
+    // Read file into memory
+    let ase = AsepriteFile::read_file(&file).unwrap();
+    // Write one output image for each frame in the Aseprite file.
+    for frame in 0..ase.num_frames() {
+        let output = format!("output_{}.png", frame);
+        // Create 
+        let img = ase.frame(frame).image();
+        img.save_with_format(output, ImageFormat::Png).unwrap();
+    }
+}
+```
+
+# Unsupported Features
+
+The following features of Aseprite 1.2.25 are not supported:
+
+- grayscale images
+- color profiles

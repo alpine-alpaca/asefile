@@ -1,5 +1,5 @@
 #![warn(clippy::all)]
-
+#![warn(missing_docs)]
 /*!
 
 Utilities for loading [Aseprite](https://www.aseprite.org/) files. This

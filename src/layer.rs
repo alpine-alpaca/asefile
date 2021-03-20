@@ -34,6 +34,7 @@ bitflags! {
         /// This is a reference layer.
         const REFERENCE = 0x0040;
 
+        /// The is a background layer.
         const BACKGROUND_LAYER = Self::MOVEMENT_LOCKED.bits | Self::BACKGROUND.bits;
     }
 }
@@ -146,6 +147,7 @@ impl Index<u32> for LayersData {
 /// Blend modes use Aseprite's "new layer blending method", i.e., we assume that
 /// the source Aseprite has a checkmark under "Edit > Preferences > Experimental >
 /// New Layer Blending Method (#1096)". This is the default as of Aseprite 1.2.25.
+#[allow(missing_docs)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BlendMode {
     Normal,

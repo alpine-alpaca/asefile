@@ -14,9 +14,19 @@ pub struct Cel<'a> {
 }
 
 impl<'a> Cel<'a> {
+    /// This cel as an image. Result has the same dimensions as the [AsepriteFile].
+    /// If the cel is empty, all image pixels will be transparent.
     pub fn image(&self) -> RgbaImage {
         self.file
             .layer_image(self.frame as u16, self.layer as usize)
+    }
+
+    /// Returns `true` if the cel contains no data.
+    pub fn is_empty(&self) -> bool {
+        self.file
+            .framedata
+            .cel(self.frame as u16, self.layer as u16)
+            .is_some()
     }
 }
 
@@ -111,8 +121,6 @@ impl CelsData {
     pub fn cel(&self, frame_id: u16, layer_id: u16) -> Option<&RawCel> {
         let layers = &self.data[frame_id as usize];
         if (layer_id as usize) >= layers.len() {
-            // Return a reference to an empty vec. Otherwise, we'd need to
-            // return an iterator.
             None
         } else {
             layers[layer_id as usize].as_ref()

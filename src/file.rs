@@ -43,10 +43,12 @@ pub enum PixelFormat {
     /// Indexed color. Color is determined by palette.
     /// The `transparent_color_index` is used to indicate a
     /// transparent pixel in any non-background layer.
+    #[allow(missing_docs)]
     Indexed { transparent_color_index: u8 },
 }
 
 impl PixelFormat {
+    /// Number of bytes to store one pixel.
     pub fn bytes_per_pixel(&self) -> usize {
         match self {
             PixelFormat::Rgba => 4,
@@ -137,6 +139,10 @@ impl AsepriteFile {
     }
 
     /// A reference to a single frame.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `index` is not less than `num_frames`.
     pub fn frame(&self, index: u32) -> Frame {
         assert!(index < self.num_frames as u32);
         Frame { file: self, index }
@@ -147,10 +153,16 @@ impl AsepriteFile {
         self.pixel_format
     }
 
+    /// Total number of tags.
     pub fn num_tags(&self) -> u32 {
         self.tags.len() as u32
     }
 
+    /// Get a reference to the tag by Id.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `tag_id` is not less than `num_tags`.
     pub fn tag(&self, tag_id: u32) -> &Tag {
         &self.tags[tag_id as usize]
     }
@@ -169,17 +181,13 @@ impl AsepriteFile {
         let mut image = RgbaImage::new(self.width as u32, self.height as u32);
 
         for (layer_id, cel) in self.framedata.frame_cels(frame) {
-            // TODO: This must be done in layer order (pre-sort Cels?)
+            // TODO: Ensure this is always done in layer order (pre-sort Cels?)
             if !self.layer(layer_id).is_visible() {
-                // println!("===> skipping invisible Cel: {:?}", cel);
                 continue;
             }
-            // println!("====> Cel: {:?}", cel);
-            //assert!(cel.opacity == 255, "NYI: different Cel opacities");
             self.copy_cel(&mut image, cel);
         }
 
-        //into_rgba8_image(image)
         image
     }
 
@@ -189,7 +197,6 @@ impl AsepriteFile {
         let blend_fn = blend_mode_to_blend_fn(layer.blend_mode());
         match &cel.data {
             CelData::Linked(frame) => {
-                //assert!(false, "NYI: Linked Cels"),
                 for cel in self.framedata.cel(*frame, cel.layer_index) {
                     match &cel.data {
                         CelData::Linked(_) => {

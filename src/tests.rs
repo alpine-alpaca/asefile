@@ -21,7 +21,7 @@ fn compare_with_reference_image(img: image::RgbaImage, filename: &str) {
     reference_path.push(format!("{}.png", filename));
     actual_path.push(format!("{}.actual.png", filename));
     let ref_image = image::open(&reference_path).unwrap();
-    let ref_rgba = ref_image.to_rgba();
+    let ref_rgba = ref_image.to_rgba8();
 
     assert_eq!(img.dimensions(), ref_rgba.dimensions());
     img.save(&actual_path).unwrap();

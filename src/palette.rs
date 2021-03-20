@@ -42,14 +42,17 @@ impl ColorPaletteEntry {
         self.rgba8
     }
 
+    /// The red channel of the color.
     pub fn red(&self) -> u8 {
         self.rgba8[0]
     }
 
+    /// The green channel of the color.
     pub fn green(&self) -> u8 {
         self.rgba8[1]
     }
 
+    /// The blue channel of the color.
     pub fn blue(&self) -> u8 {
         self.rgba8[2]
     }
@@ -59,6 +62,7 @@ impl ColorPaletteEntry {
         self.rgba8[3]
     }
 
+    /// The color name. Seems to be usually empty in practice.
     pub fn name(&self) -> Option<&str> {
         self.name.as_deref()
     }

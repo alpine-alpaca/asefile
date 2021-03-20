@@ -15,18 +15,22 @@ pub struct Tag {
 }
 
 impl Tag {
+    /// Tag name. May not be unique among all tags.
     pub fn name(&self) -> &str {
         &self.name
     }
 
+    /// First frame included in the tag.
     pub fn from_frame(&self) -> u32 {
         self.from_frame as u32
     }
 
+    /// Last frame included in the tag.
     pub fn to_frame(&self) -> u32 {
         self.to_frame as u32
     }
 
+    /// See [AnimationDirection] for details.
     pub fn animation_direction(&self) -> AnimationDirection {
         self.animation_direction
     }
