@@ -36,7 +36,19 @@ fn main() {
 
 # Unsupported Features
 
-The following features of Aseprite 1.2.25 are not supported:
+The following features of Aseprite 1.2.25 are currently not supported:
 
 - grayscale images
 - color profiles
+
+
+# Bug compatibility
+
+- For indexed color files Aseprite supports blend modes, but ignores them when
+  exporting the image. The images constructed by `asefile` currently match the
+  in-editor preview.
+
+- Aseprite has a bug in its luminance and color blend modes. Since this is the
+  same in editor and in exported files, `asefile` reproduces this bug. (If
+  Aseprite fixes this, `asefile` will fix this bug based on the version that
+  the file was generated with.)

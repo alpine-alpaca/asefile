@@ -1,6 +1,6 @@
 use crate::{error::AsepriteParseError, AsepriteFile, PixelFormat};
 use byteorder::{LittleEndian, ReadBytesExt};
-//use log::debug;
+use log::debug;
 use std::io::Read;
 
 use crate::Result;
@@ -91,6 +91,24 @@ pub fn read_aseprite<R: Read>(mut input: R) -> Result<AsepriteFile> {
     // println!("color_depth: {}, num_colors: {}", color_depth, num_colors);
 
     //println!("framedata: {:#?}", parse_info.framedata);
+    match pixel_format {
+        PixelFormat::Rgba => {}
+        PixelFormat::Grayscale => {}
+        PixelFormat::Indexed {
+            transparent_color_index,
+        } => {
+            if let Some(ref palette) = parse_info.palette {
+                parse_info
+                    .framedata
+                    .resolve_palette(palette, transparent_color_index, &layers)?;
+            } else {
+                return Err(AsepriteParseError::InvalidInput(
+                    "Input file uses indexed color mode but does not contain a palette".into(),
+                ));
+            }
+        }
+    }
+
     parse_info.framedata.validate()?;
 
     Ok(AsepriteFile {
@@ -134,8 +152,6 @@ fn parse_frame<R: Read>(
         new_num_chunks
     };
 
-    //println!("Num chunks: {}, bytes: {}", num_chunks, bytes);
-
     let mut found_layers: Vec<layer::LayerData> = Vec::new();
 
     let mut bytes_available = bytes as i64 - 16;
@@ -178,20 +194,22 @@ fn parse_frame<R: Read>(
                 if frame_id == 0 {
                     parse_info.tags = Some(tags);
                 } else {
-                    println!("Ignoring tags outside of frame 0");
+                    debug!("Ignoring tags outside of frame 0");
                 }
             }
             ChunkType::Slice => {
-                let slice = slice::parse_slice_chunk(&chunk_data)?;
-                println!("Slice: {:#?}", slice);
+                let _slice = slice::parse_slice_chunk(&chunk_data)?;
+                //println!("Slice: {:#?}", slice);
             }
             ChunkType::UserData => {
-                let ud = user_data::parse_userdata_chunk(&chunk_data)?;
-                println!("Userdata: {:#?}", ud);
+                let _ud = user_data::parse_userdata_chunk(&chunk_data)?;
+                //println!("Userdata: {:#?}", ud);
             }
-            ChunkType::OldPalette04 | ChunkType::OldPalette11 => {}
-            _ => {
-                println!("Ignoring chunk: {:?}", chunk_type);
+            ChunkType::OldPalette04 | ChunkType::OldPalette11 => {
+                // ignore old palette chunks
+            }
+            ChunkType::CelExtra | ChunkType::Mask | ChunkType::Path => {
+                debug!("Ignoring unsupported chunk type: {:?}", chunk_type);
             }
         }
     }

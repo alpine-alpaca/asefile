@@ -192,7 +192,7 @@ impl AsepriteFile {
     }
 
     fn copy_cel(&self, image: &mut RgbaImage, cel: &RawCel) {
-        assert!(self.pixel_format == PixelFormat::Rgba);
+        assert!(self.pixel_format != PixelFormat::Grayscale);
         let layer = self.layer(cel.layer_index as u32);
         let blend_fn = blend_mode_to_blend_fn(layer.blend_mode());
         match &cel.data {
@@ -202,7 +202,7 @@ impl AsepriteFile {
                         CelData::Linked(_) => {
                             panic!("Cel links to empty cel. Should have been caught by validate()");
                         }
-                        CelData::Raw {
+                        CelData::RawRgba {
                             width,
                             height,
                             data,
@@ -218,10 +218,13 @@ impl AsepriteFile {
                                 &blend_fn,
                             );
                         }
+                        CelData::RawIndexed { .. } => {
+                            panic!("Indexed data cel. Should have been caught by validate()");
+                        }
                     }
                 }
             }
-            CelData::Raw {
+            CelData::RawRgba {
                 width,
                 height,
                 data,
@@ -236,6 +239,9 @@ impl AsepriteFile {
                     &data.0,
                     &blend_fn,
                 );
+            }
+            CelData::RawIndexed { .. } => {
+                panic!("Indexed data cel. Should have been caught by validate()");
             }
         }
     }

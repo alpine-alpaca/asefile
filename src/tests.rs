@@ -28,7 +28,11 @@ fn compare_with_reference_image(img: image::RgbaImage, filename: &str) {
 
     for (x, y, expected_color) in ref_rgba.enumerate_pixels() {
         let actual_color = img.get_pixel(x, y);
-        if actual_color != expected_color {
+        if actual_color == expected_color {
+            continue;
+        } else if is_transparent(expected_color) && is_transparent(actual_color) {
+            continue;
+        } else {
             println!(
                 "Pixel difference in {}:\nlocation: {},{}\nexpected: {:?}\n  actual: {:?}",
                 actual_path.display(),
@@ -40,6 +44,10 @@ fn compare_with_reference_image(img: image::RgbaImage, filename: &str) {
             panic!("Found pixel difference");
         }
     }
+}
+
+fn is_transparent(col: &image::Rgba<u8>) -> bool {
+    col.0[3] == 0
 }
 
 #[test]
@@ -305,7 +313,7 @@ fn indexed() {
 
     assert_eq!(f.size(), (64, 64));
 
-    //compare_with_reference_image(f.frame(0).image(), "linked_cels_01");
+    compare_with_reference_image(f.frame(0).image(), "indexed_01");
 }
 
 #[test]

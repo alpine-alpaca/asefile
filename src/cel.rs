@@ -1,9 +1,12 @@
-use crate::{AsepriteFile, AsepriteParseError, PixelFormat, Result};
+use crate::layer::LayerFlags;
+use crate::{
+    layer::LayersData, AsepriteFile, AsepriteParseError, ColorPalette, PixelFormat, Result,
+};
 use byteorder::{LittleEndian, ReadBytesExt};
 use flate2::read::ZlibDecoder;
 use image::RgbaImage;
-use std::fmt;
 use std::io::{Cursor, Read};
+use std::{fmt, ops::DerefMut};
 
 /// A reference to a single Cel. This contains the image data at a specific
 /// layer and frame. In the timeline view these are the dots.
@@ -131,19 +134,20 @@ impl CelsData {
         let layers = &self.data[frame as usize];
         if let Some(ref cel) = layers[layer] {
             match &cel.data {
-                CelData::Raw { .. } => {
+                CelData::RawRgba { .. } => {
                     // TODO: Verify data length
-                    // TODO: For indexed data, verify that data is always
-                    // a valid palette index.
+                },
+                CelData::RawIndexed { .. } => {
+                    return Err(AsepriteParseError::InvalidInput("Internal error: unresolved Indexed data".into()));
                 }
                 CelData::Linked(other_frame) => {
                     match self.cel(*other_frame, layer as u16) {
                         Some(other_cel) => {
                             match &other_cel.data {
-                                CelData::Raw {..} => {},
+                                CelData::RawRgba {..} | CelData::RawIndexed {..} => {},
                                 CelData::Linked(_) => {
                                     return Err(AsepriteParseError::InvalidInput(
-                                        format!("Invalid Cel reference. Cel (f:{},l:{}) links to cel (f:{},l:{}) but that cel contains no data.",
+                                        format!("Invalid Cel reference. Cel (f:{},l:{}) links to cel (f:{},l:{}) but that cel links to another cel.",
                                     frame, layer, *other_frame, layer)
                                     ))
                                 }
@@ -155,6 +159,65 @@ impl CelsData {
                             frame, layer, *other_frame, layer)
                             ))
                         }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    // Turn indexed-color cels into rgba cels.
+    pub(crate) fn resolve_palette(
+        &mut self,
+        palette: &ColorPalette,
+        transparent_color_index: u8,
+        layer_info: &LayersData,
+    ) -> Result<()> {
+        let max_col = palette.num_colors();
+        dbg!(
+            max_col,
+            transparent_color_index,
+            palette.get(0),
+            palette.get(1)
+        );
+        for frame in 0..self.num_frames {
+            let layers = &mut self.data[frame as usize];
+            for mut cel in layers {
+                if let Some(cel) = cel.deref_mut() {
+                    if let CelData::RawIndexed {
+                        ref width,
+                        ref height,
+                        ref mut data,
+                    } = cel.data
+                    {
+                        let mut output: Vec<u8> = Vec::with_capacity(4 * data.0.len());
+                        let layer_is_background = layer_info[cel.layer_index as u32]
+                            .flags
+                            .contains(LayerFlags::BACKGROUND);
+                        for index in &data.0 {
+                            if *index as u32 >= max_col {
+                                return Err(AsepriteParseError::InvalidInput(format!(
+                                    "Index out of range: {} (max: {})",
+                                    *index, max_col
+                                )));
+                            }
+                            let col = palette.get(*index as u32).unwrap();
+                            let alpha = if *index == transparent_color_index && !layer_is_background
+                            {
+                                0
+                            } else {
+                                col.alpha()
+                            };
+                            output.push(col.red());
+                            output.push(col.green());
+                            output.push(col.blue());
+                            output.push(alpha);
+                        }
+                        cel.data = CelData::RawRgba {
+                            width: *width,
+                            height: *height,
+                            data: CelBytes(output),
+                        };
                     }
                 }
             }
@@ -186,7 +249,12 @@ pub(crate) struct CelBytes(pub Vec<u8>);
 
 #[derive(Debug)]
 pub(crate) enum CelData {
-    Raw {
+    RawRgba {
+        width: u16,
+        height: u16,
+        data: CelBytes,
+    },
+    RawIndexed {
         width: u16,
         height: u16,
         data: CelBytes,
@@ -227,10 +295,22 @@ pub(crate) fn parse_cel_chunk(data: &[u8], pixel_format: PixelFormat) -> Result<
                     output.len()
                 )));
             }
-            CelData::Raw {
-                width,
-                height,
-                data: CelBytes(output),
+            match pixel_format {
+                PixelFormat::Rgba => CelData::RawRgba {
+                    width,
+                    height,
+                    data: CelBytes(output),
+                },
+                PixelFormat::Grayscale => CelData::RawRgba {
+                    width,
+                    height,
+                    data: CelBytes(output),
+                },
+                PixelFormat::Indexed { .. } => CelData::RawIndexed {
+                    width,
+                    height,
+                    data: CelBytes(output),
+                },
             }
         }
         1 => {
@@ -245,10 +325,22 @@ pub(crate) fn parse_cel_chunk(data: &[u8], pixel_format: PixelFormat) -> Result<
             let expected_output_size =
                 width as usize * height as usize * pixel_format.bytes_per_pixel();
             let decoded_data = unzip(input, expected_output_size)?;
-            CelData::Raw {
-                width,
-                height,
-                data: CelBytes(decoded_data),
+            match pixel_format {
+                PixelFormat::Rgba => CelData::RawRgba {
+                    width,
+                    height,
+                    data: CelBytes(decoded_data),
+                },
+                PixelFormat::Grayscale => CelData::RawRgba {
+                    width,
+                    height,
+                    data: CelBytes(decoded_data),
+                },
+                PixelFormat::Indexed { .. } => CelData::RawIndexed {
+                    width,
+                    height,
+                    data: CelBytes(decoded_data),
+                },
             }
         }
         _ => {
