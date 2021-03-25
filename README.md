@@ -5,13 +5,15 @@
 [![Documentation](https://docs.rs/asefile/badge.svg)](https://docs.rs/asefile)
 <!-- [![Build Status](https://github.com/alpine-alpaca/asefile/workflows/Rust%20CI/badge.svg)](https://github.com/alpine-alpaca/asefile/actions) -->
 
-Utilities for loading [Aseprite](https://www.aseprite.org/) files. This
-library directly reads the binary Aseprite files ([file format
-specification][spec]) and does not require you to export files to JSON. This
-should make it fast enough to load your assets when the game boots up. You can
-also use it to build your own asset pipelines.
+Utilities for loading [Aseprite](https://www.aseprite.org/) files. This library
+directly reads the binary Aseprite files ([specification][spec]) and does not
+require you to export files to JSON. This should make it fast enough to load
+your assets when the game boots up (during development). You can also use it to
+build your own asset pipelines.
 
 [Documentation](https://docs.rs/asefile/)
+
+[spec]: https://github.com/aseprite/aseprite/blob/master/docs/ase-file-specs.md
 
 # Example
 
@@ -28,7 +30,7 @@ fn main() {
     // Write one output image for each frame in the Aseprite file.
     for frame in 0..ase.num_frames() {
         let output = format!("output_{}.png", frame);
-        // Create 
+        // Create image in memory, then write it to disk as PNG.
         let img = ase.frame(frame).image();
         img.save_with_format(output, ImageFormat::Png).unwrap();
     }
