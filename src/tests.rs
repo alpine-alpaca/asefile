@@ -289,7 +289,7 @@ fn single_layer() {
 
     assert_eq!(f.num_frames, 4);
     assert_eq!(f.num_layers(), 6);
-    assert_eq!(f.named_layer("Layer 1").map(|l| l.id()), Some(1));
+    assert_eq!(f.layer_by_name("Layer 1").map(|l| l.id()), Some(1));
 
     compare_with_reference_image(f.layer_image(2, 1), "single_layer");
 }
@@ -322,8 +322,8 @@ fn palette() {
 
     let pal = f.palette().unwrap();
     assert_eq!(pal.num_colors(), 85);
-    assert_eq!(pal.get(0).unwrap().raw_rgba8(), [46, 34, 47, 255]);
-    assert_eq!(pal.get(71).unwrap().raw_rgba8(), [0, 0, 0, 83]);
+    assert_eq!(pal.color(0).unwrap().raw_rgba8(), [46, 34, 47, 255]);
+    assert_eq!(pal.color(71).unwrap().raw_rgba8(), [0, 0, 0, 83]);
 }
 
 /*

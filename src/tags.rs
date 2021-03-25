@@ -41,7 +41,7 @@ impl Tag {
 pub enum AnimationDirection {
     /// Start at `from_frame` and count up to `to_frame`.
     Forward,
-    /// Start at `from_frame` and count down to `to_frame`.
+    /// Start at `to_frame` and count down to `from_frame`.
     Reverse,
     /// Start at `from_frame`, count up to `to_frame`, then back down to `from_frame`.
     PingPong,

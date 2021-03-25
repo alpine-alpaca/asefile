@@ -177,8 +177,8 @@ impl CelsData {
         dbg!(
             max_col,
             transparent_color_index,
-            palette.get(0),
-            palette.get(1)
+            palette.color(0),
+            palette.color(1)
         );
         for frame in 0..self.num_frames {
             let layers = &mut self.data[frame as usize];
@@ -201,7 +201,7 @@ impl CelsData {
                                     *index, max_col
                                 )));
                             }
-                            let col = palette.get(*index as u32).unwrap();
+                            let col = palette.color(*index as u32).unwrap();
                             let alpha = if *index == transparent_color_index && !layer_is_background
                             {
                                 0

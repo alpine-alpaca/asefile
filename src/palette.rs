@@ -24,8 +24,12 @@ impl ColorPalette {
         self.entries.len() as u32
     }
 
-    /// Look up entry at given
-    pub fn get(&self, index: u32) -> Option<&ColorPaletteEntry> {
+    /// Look up entry at given index.
+    ///
+    /// The Aseprite file format spec does not guarantee the color indices to
+    /// go from `0..num_colors()` but there doesn't seem to be a way to violate
+    /// this constraint using the Aseprite GUI.
+    pub fn color(&self, index: u32) -> Option<&ColorPaletteEntry> {
         self.entries.get(&index)
     }
 }

@@ -70,7 +70,7 @@ You can access a [Layer] by name or by ID.
 # let ase = AsepriteFile::read_file(&path).unwrap();
 let layer = ase.layer(0);
 println!("Name of layer 0: {}", layer.name());
-let layer = ase.named_layer("Layer 1").unwrap();
+let layer = ase.layer_by_name("Layer 1").unwrap();
 println!("Layer 1 is visible? {}", layer.is_visible());
 ```
 
@@ -114,7 +114,7 @@ pub type Result<T> = std::result::Result<T, AsepriteParseError>;
 pub use cel::Cel;
 // pub use color_profile::ColorProfile;
 pub use error::AsepriteParseError;
-pub use file::{AsepriteFile, Frame, PixelFormat};
+pub use file::{AsepriteFile, Frame, PixelFormat, LayersIter};
 pub use layer::{BlendMode, Layer, LayerFlags};
 pub use palette::{ColorPalette, ColorPaletteEntry};
 pub use tags::{AnimationDirection, Tag};

@@ -68,7 +68,7 @@ impl AsepriteFile {
 
     /// Load Aseprite file from any input that implements `std::io::Read`.
     ///
-    /// You can use this to read from an in memory file.
+    /// You can use this to read from an in-memory file.
     pub fn read<R: Read>(input: R) -> Result<AsepriteFile> {
         parse::read_aseprite(input)
     }
@@ -98,7 +98,17 @@ impl AsepriteFile {
         self.layers.layers.len() as u32
     }
 
+    /// The pixel format used by the origal file. This library internally
+    /// represents all images as RGBA.
+    pub fn pixel_format(&self) -> PixelFormat {
+        self.pixel_format
+    }
+
     /// The color palette in the image.
+    ///
+    /// For indexed color images, this includes all colors used by individual
+    /// cels. However, the final image after layer blending may contain colors
+    /// outside of this palette (or with different transparency levels).
     pub fn palette(&self) -> Option<&ColorPalette> {
         self.palette.as_ref()
     }
@@ -120,7 +130,7 @@ impl AsepriteFile {
     ///
     /// If multiple layers with the same name exist returns the layer with
     /// the lower ID.
-    pub fn named_layer(&self, name: &str) -> Option<Layer> {
+    pub fn layer_by_name(&self, name: &str) -> Option<Layer> {
         for layer_id in 0..self.num_layers() {
             let l = self.layer(layer_id);
             if l.name() == name {
@@ -148,23 +158,31 @@ impl AsepriteFile {
         Frame { file: self, index }
     }
 
-    /// The pixel format.
-    pub fn pixel_format(&self) -> PixelFormat {
-        self.pixel_format
-    }
-
     /// Total number of tags.
     pub fn num_tags(&self) -> u32 {
         self.tags.len() as u32
     }
 
-    /// Get a reference to the tag by Id.
+    /// Get a reference to the tag by ID.
     ///
     /// # Panics
     ///
     /// Panics if `tag_id` is not less than `num_tags`.
     pub fn tag(&self, tag_id: u32) -> &Tag {
         &self.tags[tag_id as usize]
+    }
+
+    /// Lookup tag by name.
+    ///
+    /// If multiple tags with the same name exist, returns the one with the
+    /// lower ID.
+    pub fn tag_by_name(&self, name: &str) -> Option<&Tag> {
+        for tag in &self.tags {
+            if tag.name() == name {
+                return Some(tag);
+            }
+        }
+        None
     }
 
     // pub fn color_profile(&self) -> Option<&ColorProfile> {
@@ -262,6 +280,7 @@ impl AsepriteFile {
     // }
 }
 
+/// An iterator over layers. See [AsepriteFile::layers].
 pub struct LayersIter<'a> {
     file: &'a AsepriteFile,
     next: u32,

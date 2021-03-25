@@ -3,8 +3,14 @@ name = "asefile"
 version = "0.2.0"
 authors = ["Alponso <alpine.alpaca.games@gmail.com>"]
 edition = "2018"
+license = "MIT"
+description = "Utilities for loading Aseprite files."
+homepage = "https://github.com/alpine-alpaca/asefile"
+repository = "https://github.com/alpine-alpaca/asefile"
+readme = "README.md"
+keywords = ["gamedev", "aseprite", "pixel", "2D"]
+categories = ["game-development", "multimedia::images", "rendering::data-formats"]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 byteorder = "1.3"
