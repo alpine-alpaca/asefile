@@ -10,6 +10,7 @@ use std::{fmt, ops::DerefMut};
 
 /// A reference to a single Cel. This contains the image data at a specific
 /// layer and frame. In the timeline view these are the dots.
+#[derive(Debug)]
 pub struct Cel<'a> {
     pub(crate) file: &'a AsepriteFile,
     pub(crate) layer: u32,

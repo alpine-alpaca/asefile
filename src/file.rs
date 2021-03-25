@@ -14,6 +14,7 @@ use cel::{CelData, RawCel};
 use image::{Pixel, Rgba, RgbaImage};
 
 /// A parsed Aseprite file.
+#[derive(Debug)]
 pub struct AsepriteFile {
     pub(crate) width: u16,
     pub(crate) height: u16,
@@ -28,6 +29,7 @@ pub struct AsepriteFile {
 }
 
 /// A reference to a single frame.
+#[derive(Debug)]
 pub struct Frame<'a> {
     file: &'a AsepriteFile,
     index: u32,
@@ -281,6 +283,7 @@ impl AsepriteFile {
 }
 
 /// An iterator over layers. See [AsepriteFile::layers].
+#[derive(Debug)]
 pub struct LayersIter<'a> {
     file: &'a AsepriteFile,
     next: u32,

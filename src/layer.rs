@@ -40,6 +40,7 @@ bitflags! {
 }
 
 /// A reference to a single layer.
+#[derive(Debug)]
 pub struct Layer<'a> {
     pub(crate) file: &'a AsepriteFile,
     pub(crate) layer_id: u32,
