@@ -1,5 +1,6 @@
 # asefile
 
+[![Build status](https://github.com/alpine-alpaca/asefile/actions/workflows/rust.yml/badge.svg)](https://github.com/alpine-alpaca/asefile/actions/)
 [![crates.io](https://img.shields.io/crates/v/asefile.svg)](https://crates.io/crates/asefile)
 [![Documentation](https://docs.rs/asefile/badge.svg)](https://docs.rs/asefile)
 <!-- [![Build Status](https://github.com/alpine-alpaca/asefile/workflows/Rust%20CI/badge.svg)](https://github.com/alpine-alpaca/asefile/actions) -->
