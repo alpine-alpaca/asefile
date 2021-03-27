@@ -10,7 +10,12 @@ repository = "https://github.com/alpine-alpaca/asefile"
 readme = "README.md"
 keywords = ["gamedev", "aseprite", "pixel", "2D"]
 categories = ["game-development", "multimedia::images", "rendering::data-formats"]
-
+include = [
+    "Cargo.toml",
+    "README.md",
+    "LICENSE",
+    "src/*"
+]
 
 [dependencies]
 byteorder = "1.3"
