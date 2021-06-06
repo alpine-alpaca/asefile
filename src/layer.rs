@@ -1,7 +1,10 @@
 use crate::{cel::Cel, parse::read_string, AsepriteFile, AsepriteParseError, Result};
 use bitflags::bitflags;
 use byteorder::{LittleEndian, ReadBytesExt};
-use std::{io::Cursor, ops::Index};
+use std::{
+    io::{Cursor, Read},
+    ops::Index,
+};
 
 /// Types of layer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -11,9 +14,9 @@ pub enum LayerType {
     /// A layer that groups other layers and does not contain any image data.
     /// In Aseprite these are represented by a folder icon.
     Group,
-    /// A tilemap layer.
+    /// A tilemap layer. Contains the tileset index.
     /// In Aseprite these are represented by a grid icon.
-    Tilemap,
+    Tilemap(u32),
 }
 
 bitflags! {
@@ -126,7 +129,6 @@ pub struct LayerData {
     pub(crate) blend_mode: BlendMode,
     pub(crate) opacity: u8,
     pub(crate) layer_type: LayerType,
-    pub(crate) tilemap_index: Option<u32>,
     child_level: u16,
 }
 
@@ -189,12 +191,7 @@ pub(crate) fn parse_layer_chunk(data: &[u8]) -> Result<LayerData> {
     let _reserved1 = input.read_u8()?;
     let _reserved2 = input.read_u16::<LittleEndian>()?;
     let name = read_string(&mut input)?;
-    let layer_type = parse_layer_type(layer_type)?;
-    let tilemap_index = if layer_type == LayerType::Tilemap {
-        Some(input.read_u32::<LittleEndian>()?)
-    } else {
-        None
-    };
+    let layer_type = parse_layer_type(layer_type, &mut input)?;
 
     let flags = LayerFlags::from_bits_truncate(flags as u32);
 
@@ -212,15 +209,17 @@ pub(crate) fn parse_layer_chunk(data: &[u8]) -> Result<LayerData> {
         opacity,
         layer_type,
         child_level,
-        tilemap_index,
     })
 }
 
-fn parse_layer_type(id: u16) -> Result<LayerType> {
+fn parse_layer_type<R: Read>(id: u16, input: &mut R) -> Result<LayerType> {
     match id {
         0 => Ok(LayerType::Image),
         1 => Ok(LayerType::Group),
-        2 => Ok(LayerType::Tilemap),
+        2 => input
+            .read_u32::<LittleEndian>()
+            .map(|idx| LayerType::Tilemap(idx))
+            .map_err(|e| e.into()),
         _ => Err(AsepriteParseError::InvalidInput(format!(
             "Invalid layer type: {}",
             id
