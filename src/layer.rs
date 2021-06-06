@@ -220,6 +220,7 @@ fn parse_layer_type(id: u16) -> Result<LayerType> {
     match id {
         0 => Ok(LayerType::Image),
         1 => Ok(LayerType::Group),
+        2 => Ok(LayerType::Tilemap),
         _ => Err(AsepriteParseError::InvalidInput(format!(
             "Invalid layer type: {}",
             id
