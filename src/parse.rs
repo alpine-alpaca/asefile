@@ -24,6 +24,7 @@ impl ParseInfo {
 }
 
 // file format docs: https://github.com/aseprite/aseprite/blob/master/docs/ase-file-specs.md
+// v1.3 spec diff doc: https://gist.github.com/dacap/35f3b54fbcd021d099e0166a4f295bab
 pub fn read_aseprite<R: Read>(mut input: R) -> Result<AsepriteFile> {
     let _size = input.read_u32::<LittleEndian>()?;
     let magic_number = input.read_u16::<LittleEndian>()?;

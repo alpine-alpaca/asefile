@@ -11,6 +11,9 @@ pub enum LayerType {
     /// A layer that groups other layers and does not contain any image data.
     /// In Aseprite these are represented by a folder icon.
     Group,
+    /// A tilemap layer.
+    /// In Aseprite these are represented by a grid icon.
+    Tilemap,
 }
 
 bitflags! {
@@ -77,7 +80,7 @@ impl<'a> Layer<'a> {
         self.data().opacity
     }
 
-    /// Describes whether this is a regular layer or a group layer.
+    /// Describes whether this is a regular, group, or tilemap layer.
     pub fn layer_type(&self) -> LayerType {
         self.data().layer_type
     }
@@ -123,6 +126,7 @@ pub struct LayerData {
     pub(crate) blend_mode: BlendMode,
     pub(crate) opacity: u8,
     pub(crate) layer_type: LayerType,
+    pub(crate) tilemap_index: Option<u32>,
     child_level: u16,
 }
 
@@ -185,10 +189,15 @@ pub(crate) fn parse_layer_chunk(data: &[u8]) -> Result<LayerData> {
     let _reserved1 = input.read_u8()?;
     let _reserved2 = input.read_u16::<LittleEndian>()?;
     let name = read_string(&mut input)?;
+    let layer_type = parse_layer_type(layer_type)?;
+    let tilemap_index = if layer_type == LayerType::Tilemap {
+        Some(input.read_u32::<LittleEndian>()?)
+    } else {
+        None
+    };
 
     let flags = LayerFlags::from_bits_truncate(flags as u32);
 
-    let layer_type = parse_layer_type(layer_type)?;
     let blend_mode = parse_blend_mode(blend_mode)?;
 
     // println!(
@@ -203,6 +212,7 @@ pub(crate) fn parse_layer_chunk(data: &[u8]) -> Result<LayerData> {
         opacity,
         layer_type,
         child_level,
+        tilemap_index,
     })
 }
 
