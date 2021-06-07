@@ -5,7 +5,7 @@ use crate::{
 use byteorder::{LittleEndian, ReadBytesExt};
 use flate2::read::ZlibDecoder;
 use image::RgbaImage;
-use std::io::{Cursor, Read};
+use std::io::{Cursor, Read, Seek, SeekFrom};
 use std::{fmt, ops::DerefMut};
 
 /// A reference to a single Cel. This contains the image data at a specific
@@ -145,7 +145,7 @@ impl CelsData {
                     match self.cel(*other_frame, layer as u16) {
                         Some(other_cel) => {
                             match &other_cel.data {
-                                CelData::RawRgba {..} | CelData::RawIndexed {..} => {},
+                                CelData::RawRgba {..} | CelData::RawIndexed {..} => {}, | CelData::Tilemap { .. } => {},
                                 CelData::Linked(_) => {
                                     return Err(AsepriteParseError::InvalidInput(
                                         format!("Invalid Cel reference. Cel (f:{},l:{}) links to cel (f:{},l:{}) but that cel links to another cel.",
@@ -161,6 +161,9 @@ impl CelsData {
                             ))
                         }
                     }
+                }
+                CelData::Tilemap { .. } => {
+                    // TODO: Verify
                 }
             }
         }
@@ -249,6 +252,8 @@ pub(crate) struct RawCel {
 pub(crate) struct CelBytes(pub Vec<u8>);
 
 #[derive(Debug)]
+pub(crate) struct TileBytes(pub Vec<u8>);
+#[derive(Debug)]
 pub(crate) enum CelData {
     RawRgba {
         width: u16,
@@ -261,7 +266,16 @@ pub(crate) enum CelData {
         data: CelBytes,
     },
     Linked(u16),
-    // ZlibData { width: u16, height: u16, data: CelBytes },
+    Tilemap {
+        width: u16,
+        height: u16,
+        bits_per_tile: u16,
+        tile_id_bitmask: u32,
+        x_flip_bitmask: u32,
+        y_flip_bitmask: u32,
+        rotate_90cw_bitmask: u32,
+        tiles: TileBytes,
+    },
 }
 
 impl fmt::Debug for CelBytes {
@@ -342,6 +356,32 @@ pub(crate) fn parse_cel_chunk(data: &[u8], pixel_format: PixelFormat) -> Result<
                     height,
                     data: CelBytes(decoded_data),
                 },
+            }
+        }
+        3 => {
+            // Compressed tilemap
+            let width = input.read_u16::<LittleEndian>()?;
+            let height = input.read_u16::<LittleEndian>()?;
+            let bits_per_tile = input.read_u16::<LittleEndian>()?;
+            let tile_id_bitmask = input.read_u32::<LittleEndian>()?;
+            let x_flip_bitmask = input.read_u32::<LittleEndian>()?;
+            let y_flip_bitmask = input.read_u32::<LittleEndian>()?;
+            let rotate_90cw_bitmask = input.read_u32::<LittleEndian>()?;
+            // Skip 10 reserved bytes
+            input.seek(SeekFrom::Current(10));
+            // Tiles are 8-bit, 16-bit, or 32-bit
+            let bytes_per_tile = bits_per_tile as usize / 8;
+            let expected_output_size = width as usize * height as usize * bytes_per_tile;
+            let decoded_data = unzip(input, expected_output_size)?;
+            CelData::Tilemap {
+                width,
+                height,
+                bits_per_tile,
+                tile_id_bitmask,
+                x_flip_bitmask,
+                y_flip_bitmask,
+                rotate_90cw_bitmask,
+                tiles: TileBytes(decoded_data),
             }
         }
         _ => {
