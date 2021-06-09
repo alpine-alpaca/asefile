@@ -6,7 +6,7 @@ use std::{
 
 use crate::{
     blend::{self, Color8},
-    cel::CelsData,
+    cel::{CelBytes, CelsData, TilemapData},
     layer::{Layer, LayersData},
 };
 use crate::{cel::Cel, *};
@@ -219,24 +219,20 @@ impl AsepriteFile {
             CelData::Linked(frame) => {
                 for cel in self.framedata.cel(*frame, cel.layer_index) {
                     match &cel.data {
+                        CelData::RawRgba(cel_bytes) => {
+                            copy_cel_to_image(image, cel, cel_bytes, &blend_fn);
+                        }
+                        CelData::Tilemap(tilemap_data) => {
+                            let TilemapData { cel_bytes, .. } = tilemap_data;
+                            copy_cel_to_image(image, cel, cel_bytes, &blend_fn)
+                        }
+                        CelData::TilemapIndexed(_) => {
+                            panic!(
+                                "Indexed tilemap data cel. Should have been caught by validate()"
+                            );
+                        }
                         CelData::Linked(_) => {
                             panic!("Cel links to empty cel. Should have been caught by validate()");
-                        }
-                        CelData::RawRgba {
-                            width,
-                            height,
-                            data,
-                        } => {
-                            copy_cel_to_image(
-                                image,
-                                cel.x as i32,
-                                cel.y as i32,
-                                *width as i32,
-                                *height as i32,
-                                cel.opacity,
-                                &data.0,
-                                &blend_fn,
-                            );
                         }
                         CelData::RawIndexed { .. } => {
                             panic!("Indexed data cel. Should have been caught by validate()");
@@ -244,24 +240,18 @@ impl AsepriteFile {
                     }
                 }
             }
-            CelData::RawRgba {
-                width,
-                height,
-                data,
-            } => {
-                copy_cel_to_image(
-                    image,
-                    cel.x as i32,
-                    cel.y as i32,
-                    *width as i32,
-                    *height as i32,
-                    cel.opacity,
-                    &data.0,
-                    &blend_fn,
-                );
+            CelData::RawRgba(cel_bytes) => {
+                copy_cel_to_image(image, cel, cel_bytes, &blend_fn);
+            }
+            CelData::Tilemap(tilemap_data) => {
+                let TilemapData { cel_bytes, .. } = tilemap_data;
+                copy_cel_to_image(image, cel, cel_bytes, &blend_fn)
             }
             CelData::RawIndexed { .. } => {
                 panic!("Indexed data cel. Should have been caught by validate()");
+            }
+            CelData::TilemapIndexed(_) => {
+                panic!("Indexed tilemap data cel. Should have been caught by validate()");
             }
         }
     }
@@ -357,16 +347,20 @@ fn blend_mode_to_blend_fn(mode: BlendMode) -> BlendFn {
 
 fn copy_cel_to_image(
     image: &mut RgbaImage,
-    x0: i32,
-    y0: i32,
-    width: i32,
-    height: i32,
-    opacity: u8,
-    rgba_data: &[u8],
-    blend_func: &BlendFn,
+    cel: &RawCel,
+    cel_bytes: &CelBytes,
+    blend_fn: &BlendFn,
 ) {
-    let x_end = x0 + width;
-    let y_end = y0 + height;
+    let CelBytes {
+        width,
+        height,
+        bytes: rgba_data,
+    } = cel_bytes;
+    let x0 = cel.x as i32;
+    let y0 = cel.y as i32;
+    let opacity = cel.opacity;
+    let x_end = x0 + (*width as i32);
+    let y_end = y0 + (*height as i32);
     // let x0 = x0.max(0);
     // let y0 = y0.max(0);
     //assert!(x0 >= 0 && y0 >= 0);
@@ -386,7 +380,7 @@ fn copy_cel_to_image(
             if x < 0 || x >= img_width as i32 {
                 continue;
             }
-            let src = 4 * ((y - y0) as usize * width as usize + (x - x0) as usize);
+            let src = 4 * ((y - y0) as usize * *width as usize + (x - x0) as usize);
 
             let pixel = Rgba::from_channels(
                 rgba_data[src],
@@ -396,7 +390,7 @@ fn copy_cel_to_image(
             );
 
             let src = *image.get_pixel(x as u32, y as u32);
-            let new = blend_func(src, pixel, opacity);
+            let new = blend_fn(src, pixel, opacity);
             image.put_pixel(x as u32, y as u32, new);
 
             // let new = image.get_pixel(x as u32, y as u32);

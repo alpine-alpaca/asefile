@@ -209,7 +209,7 @@ fn parse_frame<R: Read>(
             ChunkType::OldPalette04 | ChunkType::OldPalette11 => {
                 // ignore old palette chunks
             }
-            ChunkType::CelExtra | ChunkType::Mask | ChunkType::Path => {
+            ChunkType::CelExtra | ChunkType::Mask | ChunkType::Path | ChunkType::ExternalFiles => {
                 debug!("Ignoring unsupported chunk type: {:?}", chunk_type);
             }
         }
@@ -237,6 +237,7 @@ enum ChunkType {
     Tags,
     UserData,
     Slice,
+    ExternalFiles,
 }
 
 fn parse_chunk_type(chunk_type: u16) -> Result<ChunkType> {
@@ -247,6 +248,7 @@ fn parse_chunk_type(chunk_type: u16) -> Result<ChunkType> {
         0x2005 => Ok(ChunkType::Cel),
         0x2006 => Ok(ChunkType::CelExtra),
         0x2007 => Ok(ChunkType::ColorProfile),
+        0x2008 => Ok(ChunkType::ExternalFiles),
         0x2016 => Ok(ChunkType::Mask),
         0x2017 => Ok(ChunkType::Path),
         0x2018 => Ok(ChunkType::Tags),
