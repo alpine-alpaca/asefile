@@ -7,6 +7,7 @@ use std::{
 use crate::{
     blend::{self, Color8},
     cel::{CelBytes, CelsData, TilemapData},
+    external_file::{ExternalFile, ExternalFileId, ExternalFilesById},
     layer::{Layer, LayersData},
 };
 use crate::{cel::Cel, *};
@@ -26,6 +27,7 @@ pub struct AsepriteFile {
     pub(crate) frame_times: Vec<u16>,
     pub(crate) tags: Vec<Tag>,
     pub(crate) framedata: CelsData, // Vec<Vec<cel::RawCel>>,
+    pub(crate) external_files: ExternalFilesById,
 }
 
 /// A reference to a single frame.
@@ -158,6 +160,20 @@ impl AsepriteFile {
     pub fn frame(&self, index: u32) -> Frame {
         assert!(index < self.num_frames as u32);
         Frame { file: self, index }
+    }
+
+    /// A HashMap of external files by id.
+    pub fn external_files(&self) -> &ExternalFilesById {
+        &self.external_files
+    }
+
+    /// Get a reference to an external file by ID.
+    ///
+    /// # Panics
+    ///
+    /// Panics if no external file is found for the given id.
+    pub fn external_file_by_id(&self, id: &ExternalFileId) -> &ExternalFile {
+        &self.external_files[*id]
     }
 
     /// Total number of tags.

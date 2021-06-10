@@ -1,3 +1,4 @@
+use crate::external_file::{ExternalFile, ExternalFilesById};
 use crate::{error::AsepriteParseError, AsepriteFile, PixelFormat};
 use byteorder::{LittleEndian, ReadBytesExt};
 use log::debug;
@@ -13,6 +14,7 @@ struct ParseInfo {
     framedata: cel::CelsData, // Vec<Vec<cel::RawCel>>,
     frame_times: Vec<u16>,
     tags: Option<Vec<Tag>>,
+    external_files: ExternalFilesById,
 }
 
 impl ParseInfo {
@@ -20,6 +22,11 @@ impl ParseInfo {
         self.framedata.add_cel(frame_id, cel)
         // let idx = frame_id as usize;
         // self.framedata[idx].push(cel);
+    }
+    fn add_external_files(&mut self, files: Vec<ExternalFile>) {
+        for external_file in files {
+            self.external_files.add(external_file);
+        }
     }
 }
 
@@ -72,6 +79,7 @@ pub fn read_aseprite<R: Read>(mut input: R) -> Result<AsepriteFile> {
         framedata,
         frame_times: vec![default_frame_time; num_frames as usize],
         tags: None,
+        external_files: ExternalFilesById::new(),
     };
 
     let pixel_format = parse_pixel_format(color_depth, transparent_color_index)?;
@@ -123,6 +131,7 @@ pub fn read_aseprite<R: Read>(mut input: R) -> Result<AsepriteFile> {
         layers,
         palette: parse_info.palette,
         tags: parse_info.tags.unwrap_or_default(),
+        external_files: parse_info.external_files,
     })
 }
 
@@ -190,6 +199,10 @@ fn parse_frame<R: Read>(
                 let cel = cel::parse_cel_chunk(&chunk_data, pixel_format)?;
                 parse_info.add_cel(frame_id, cel)?;
             }
+            ChunkType::ExternalFiles => {
+                let files = ExternalFile::parse_chunk(&chunk_data)?;
+                parse_info.add_external_files(files);
+            }
             ChunkType::Tags => {
                 let tags = tags::parse_tags_chunk(&chunk_data)?;
                 if frame_id == 0 {
@@ -209,7 +222,7 @@ fn parse_frame<R: Read>(
             ChunkType::OldPalette04 | ChunkType::OldPalette11 => {
                 // ignore old palette chunks
             }
-            ChunkType::CelExtra | ChunkType::Mask | ChunkType::Path | ChunkType::ExternalFiles => {
+            ChunkType::CelExtra | ChunkType::Mask | ChunkType::Path => {
                 debug!("Ignoring unsupported chunk type: {:?}", chunk_type);
             }
         }
