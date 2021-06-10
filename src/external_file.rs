@@ -63,6 +63,6 @@ impl Index<ExternalFileId> for ExternalFilesById {
         if map.contains_key(&id) {
             return &self.map()[&id];
         }
-        panic!(format!("no external file found for id: {}", &id.0))
+        panic!("no external file found for id")
     }
 }
