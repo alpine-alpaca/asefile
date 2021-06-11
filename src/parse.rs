@@ -1,8 +1,8 @@
 use crate::external_file::{ExternalFile, ExternalFilesById};
+use crate::reader::AseReader;
 use crate::{error::AsepriteParseError, AsepriteFile, PixelFormat};
-use byteorder::{LittleEndian, ReadBytesExt};
 use log::debug;
-use std::io::Read;
+use std::io::{Read, Seek};
 
 use crate::Result;
 use crate::{cel, color_profile, layer, palette, slice, tags, user_data, Tag};
@@ -32,9 +32,10 @@ impl ParseInfo {
 
 // file format docs: https://github.com/aseprite/aseprite/blob/master/docs/ase-file-specs.md
 // v1.3 spec diff doc: https://gist.github.com/dacap/35f3b54fbcd021d099e0166a4f295bab
-pub fn read_aseprite<R: Read>(mut input: R) -> Result<AsepriteFile> {
-    let _size = input.read_u32::<LittleEndian>()?;
-    let magic_number = input.read_u16::<LittleEndian>()?;
+pub fn read_aseprite<R: Read + Seek>(input: R) -> Result<AsepriteFile> {
+    let mut reader = AseReader::with(input);
+    let _size = reader.dword()?;
+    let magic_number = reader.word()?;
     if magic_number != 0xA5E0 {
         return Err(AsepriteParseError::InvalidInput(format!(
             "Invalid magic number for header: {:x} != {:x}",
@@ -42,26 +43,26 @@ pub fn read_aseprite<R: Read>(mut input: R) -> Result<AsepriteFile> {
         )));
     }
 
-    let num_frames = input.read_u16::<LittleEndian>()?;
-    let width = input.read_u16::<LittleEndian>()?;
-    let height = input.read_u16::<LittleEndian>()?;
-    let color_depth = input.read_u16::<LittleEndian>()?;
-    let _flags = input.read_u32::<LittleEndian>()?;
-    let default_frame_time = input.read_u16::<LittleEndian>()?;
-    let _placeholder1 = input.read_u32::<LittleEndian>()?;
-    let _placeholder2 = input.read_u32::<LittleEndian>()?;
-    let transparent_color_index = input.read_u8()?;
-    let _ignore1 = input.read_u8()?;
-    let _ignore2 = input.read_u16::<LittleEndian>()?;
-    let _num_colors = input.read_u16::<LittleEndian>()?;
-    let pixel_width = input.read_u8()?;
-    let pixel_height = input.read_u8()?;
-    let _grid_x = input.read_i16::<LittleEndian>()?;
-    let _grid_y = input.read_i16::<LittleEndian>()?;
-    let _grid_width = input.read_u16::<LittleEndian>()?;
-    let _grid_height = input.read_u16::<LittleEndian>()?;
+    let num_frames = reader.word()?;
+    let width = reader.word()?;
+    let height = reader.word()?;
+    let color_depth = reader.word()?;
+    let _flags = reader.dword()?;
+    let default_frame_time = reader.word()?;
+    let _placeholder1 = reader.dword()?;
+    let _placeholder2 = reader.dword()?;
+    let transparent_color_index = reader.byte()?;
+    let _ignore1 = reader.byte()?;
+    let _ignore2 = reader.word()?;
+    let _num_colors = reader.word()?;
+    let pixel_width = reader.byte()?;
+    let pixel_height = reader.byte()?;
+    let _grid_x = reader.short()?;
+    let _grid_y = reader.short()?;
+    let _grid_width = reader.word()?;
+    let _grid_height = reader.word()?;
     let mut rest = [0_u8; 84];
-    input.read_exact(&mut rest)?;
+    reader.read_exact(&mut rest)?;
 
     if !(pixel_width == 1 && pixel_height == 1) {
         return Err(AsepriteParseError::UnsupportedFeature(
@@ -86,7 +87,7 @@ pub fn read_aseprite<R: Read>(mut input: R) -> Result<AsepriteFile> {
 
     for frame_id in 0..num_frames {
         // println!("--- Frame {} -------", frame_id);
-        parse_frame(&mut input, frame_id, pixel_format, &mut parse_info)?;
+        parse_frame(&mut reader, frame_id, pixel_format, &mut parse_info)?;
     }
 
     let layers = parse_info
@@ -135,24 +136,24 @@ pub fn read_aseprite<R: Read>(mut input: R) -> Result<AsepriteFile> {
     })
 }
 
-fn parse_frame<R: Read>(
-    input: &mut R,
+fn parse_frame<R: Read + Seek>(
+    reader: &mut AseReader<R>,
     frame_id: u16,
     pixel_format: PixelFormat,
     parse_info: &mut ParseInfo,
 ) -> Result<()> {
-    let bytes = input.read_u32::<LittleEndian>()?;
-    let magic_number = input.read_u16::<LittleEndian>()?;
+    let bytes = reader.dword()?;
+    let magic_number = reader.word()?;
     if magic_number != 0xF1FA {
         return Err(AsepriteParseError::InvalidInput(format!(
             "Invalid magic number for frame: {:x} != {:x}",
             magic_number, 0xF1FA
         )));
     }
-    let old_num_chunks = input.read_u16::<LittleEndian>()?;
-    let frame_duration_ms = input.read_u16::<LittleEndian>()?;
-    let _placeholder = input.read_u16::<LittleEndian>()?;
-    let new_num_chunks = input.read_u32::<LittleEndian>()?;
+    let old_num_chunks = reader.word()?;
+    let frame_duration_ms = reader.word()?;
+    let _placeholder = reader.word()?;
+    let new_num_chunks = reader.dword()?;
 
     parse_info.frame_times[frame_id as usize] = frame_duration_ms;
 
@@ -167,13 +168,13 @@ fn parse_frame<R: Read>(
     let mut bytes_available = bytes as i64 - 16;
     for _chunk in 0..num_chunks {
         // chunk size includes header
-        let chunk_size = input.read_u32::<LittleEndian>()?;
-        let chunk_type_code = input.read_u16::<LittleEndian>()?;
+        let chunk_size = reader.dword()?;
+        let chunk_type_code = reader.word()?;
         let chunk_type = parse_chunk_type(chunk_type_code)?;
         check_chunk_bytes(chunk_size, bytes_available)?;
         let chunk_data_bytes = chunk_size as usize - CHUNK_HEADER_SIZE;
         let mut chunk_data = vec![0_u8; chunk_data_bytes];
-        input.read_exact(&mut chunk_data)?;
+        reader.read_exact(&mut chunk_data)?;
         bytes_available -= chunk_size as i64;
         // println!(
         //     "chunk: {} size: {}, type: {:?}, bytes read: {}",
@@ -293,14 +294,6 @@ fn check_chunk_bytes(chunk_size: u32, bytes_available: i64) -> Result<()> {
         )));
     }
     Ok(())
-}
-
-pub(crate) fn read_string<R: Read>(input: &mut R) -> Result<String> {
-    let str_len = input.read_u16::<LittleEndian>()?;
-    let mut str_bytes = vec![0_u8; str_len as usize];
-    input.read_exact(&mut str_bytes)?;
-    let s = String::from_utf8(str_bytes)?;
-    Ok(s)
 }
 
 fn parse_pixel_format(color_depth: u16, transparent_color_index: u8) -> Result<PixelFormat> {

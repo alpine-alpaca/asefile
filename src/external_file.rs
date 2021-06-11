@@ -1,9 +1,7 @@
-use crate::parse::read_string;
+use crate::reader::AseReader;
 use crate::Result;
-use byteorder::{LittleEndian, ReadBytesExt};
 use core::str;
 use std::collections::HashMap;
-use std::io::{Cursor, Seek, SeekFrom};
 use std::ops::Index;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
@@ -12,7 +10,7 @@ impl ExternalFileId {
     fn new(id: u32) -> Self {
         Self(id)
     }
-    fn value(&self) -> &u32 {
+    pub fn value(&self) -> &u32 {
         &self.0
     }
 }
@@ -33,14 +31,16 @@ impl ExternalFile {
         &self.name
     }
     pub(crate) fn parse_chunk(data: &[u8]) -> Result<Vec<Self>> {
-        let mut input = Cursor::new(data);
-        let entry_ct = input.read_u32::<LittleEndian>()?;
+        let mut reader = AseReader::new(data);
+        let entry_ct = reader.dword()?;
         let mut results = Vec::with_capacity(entry_ct as usize);
-        input.seek(SeekFrom::Current(8))?;
+        // Reserved bytes
+        reader.skip_bytes(8)?;
         for _ in 0..entry_ct {
-            let id = ExternalFileId::new(input.read_u32::<LittleEndian>()?);
-            input.seek(SeekFrom::Current(8))?;
-            let name = read_string(&mut input)?;
+            let id = ExternalFileId::new(reader.dword()?);
+            // Reserved bytes
+            reader.skip_bytes(8)?;
+            let name = reader.string()?;
             results.push(Self::new(id, name))
         }
         Ok(results)

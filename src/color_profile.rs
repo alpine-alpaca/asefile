@@ -1,6 +1,4 @@
-use crate::{AsepriteParseError, Result};
-use byteorder::{LittleEndian, ReadBytesExt};
-use std::io::Cursor;
+use crate::{reader::AseReader, AsepriteParseError, Result};
 
 #[derive(Debug)]
 pub struct ColorProfile {
@@ -17,11 +15,12 @@ pub enum ColorProfileType {
 }
 
 pub(crate) fn parse_color_profile(data: &[u8]) -> Result<ColorProfile> {
-    let mut input = Cursor::new(data);
-    let profile_type = input.read_u16::<LittleEndian>()?;
-    let flags = input.read_u16::<LittleEndian>()?;
-    let _fixed_gamma = input.read_u32::<LittleEndian>()?;
-    let _reserved = input.read_u64::<LittleEndian>()?;
+    let mut reader = AseReader::new(data);
+    let profile_type = reader.word()?;
+    let flags = reader.word()?;
+    let _fixed_gamma = reader.dword()?;
+    // Reserved bytes
+    reader.skip_bytes(8)?;
 
     let profile_type = parse_color_profile_type(profile_type)?;
     let fixed_gamma = if flags & 1 != 0 {

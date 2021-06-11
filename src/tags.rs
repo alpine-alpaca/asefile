@@ -1,6 +1,4 @@
-use crate::{parse::read_string, AsepriteParseError, Result};
-use byteorder::{LittleEndian, ReadBytesExt};
-use std::io::Cursor;
+use crate::{reader::AseReader, AsepriteParseError, Result};
 
 /// A tag is a grouping of one or more frames.
 ///
@@ -48,20 +46,22 @@ pub enum AnimationDirection {
 }
 
 pub(crate) fn parse_tags_chunk(data: &[u8]) -> Result<Vec<Tag>> {
-    let mut input = Cursor::new(data);
+    let mut reader = AseReader::new(data);
 
-    let num_tags = input.read_u16::<LittleEndian>()?;
-    let _reserved = input.read_u64::<LittleEndian>()?;
+    let num_tags = reader.word()?;
+    // Reserved bytes
+    reader.skip_bytes(8)?;
 
     let mut result = Vec::with_capacity(num_tags as usize);
 
     for _tag in 0..num_tags {
-        let from_frame = input.read_u16::<LittleEndian>()?;
-        let to_frame = input.read_u16::<LittleEndian>()?;
-        let anim_dir = input.read_u8()?;
-        let _reserved = input.read_u64::<LittleEndian>()?;
-        let _color = input.read_u32::<LittleEndian>()?;
-        let name = read_string(&mut input)?;
+        let from_frame = reader.word()?;
+        let to_frame = reader.word()?;
+        let anim_dir = reader.byte()?;
+        // Reserved bytes
+        reader.skip_bytes(8)?;
+        let _color = reader.dword()?;
+        let name = reader.string()?;
         let animation_direction = parse_animation_direction(anim_dir)?;
         result.push(Tag {
             name,

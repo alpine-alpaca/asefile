@@ -1,6 +1,4 @@
-use crate::{parse::read_string, Result};
-use byteorder::{LittleEndian, ReadBytesExt};
-use std::io::Cursor;
+use crate::{reader::AseReader, Result};
 
 #[derive(Debug)]
 pub struct Slice {
@@ -18,32 +16,32 @@ pub struct SliceKey {
 }
 
 pub(crate) fn parse_slice_chunk(data: &[u8]) -> Result<Slice> {
-    let mut input = Cursor::new(data);
+    let mut reader = AseReader::new(data);
 
-    let num_slice_keys = input.read_u32::<LittleEndian>()?;
-    let flags = input.read_u32::<LittleEndian>()?;
-    let _reserved = input.read_u32::<LittleEndian>()?;
-    let name = read_string(&mut input)?;
+    let num_slice_keys = reader.dword()?;
+    let flags = reader.dword()?;
+    let _reserved = reader.dword()?;
+    let name = reader.string()?;
 
     let mut slice_keys: Vec<SliceKey> = Vec::with_capacity(num_slice_keys as usize);
     for _id in 0..num_slice_keys {
-        let from_frame = input.read_u32::<LittleEndian>()?;
-        let origin_x = input.read_i32::<LittleEndian>()?;
-        let origin_y = input.read_i32::<LittleEndian>()?;
-        let width = input.read_u32::<LittleEndian>()?;
-        let height = input.read_u32::<LittleEndian>()?;
+        let from_frame = reader.dword()?;
+        let origin_x = reader.long()?;
+        let origin_y = reader.long()?;
+        let width = reader.dword()?;
+        let height = reader.dword()?;
         let slice9 = if flags & 1 != 0 {
-            let center_x = input.read_i32::<LittleEndian>()?;
-            let center_y = input.read_i32::<LittleEndian>()?;
-            let center_width = input.read_u32::<LittleEndian>()?;
-            let center_height = input.read_u32::<LittleEndian>()?;
+            let center_x = reader.long()?;
+            let center_y = reader.long()?;
+            let center_width = reader.dword()?;
+            let center_height = reader.dword()?;
             Some((center_x, center_y, center_width, center_height))
         } else {
             None
         };
         let pivot = if flags & 2 != 0 {
-            let pivot_x = input.read_i32::<LittleEndian>()?;
-            let pivot_y = input.read_i32::<LittleEndian>()?;
+            let pivot_x = reader.long()?;
+            let pivot_y = reader.long()?;
             Some((pivot_x, pivot_y))
         } else {
             None

@@ -1,6 +1,4 @@
-use crate::{parse::read_string, Result};
-use byteorder::{LittleEndian, ReadBytesExt};
-use std::io::Cursor;
+use crate::{reader::AseReader, Result};
 
 #[derive(Debug)]
 pub struct UserData {
@@ -9,20 +7,20 @@ pub struct UserData {
 }
 
 pub(crate) fn parse_userdata_chunk(data: &[u8]) -> Result<UserData> {
-    let mut input = Cursor::new(data);
+    let mut reader = AseReader::new(data);
 
-    let flags = input.read_u32::<LittleEndian>()?;
+    let flags = reader.dword()?;
     let text = if flags & 1 != 0 {
-        let s = read_string(&mut input)?;
+        let s = reader.string()?;
         Some(s)
     } else {
         None
     };
     let color = if flags & 2 != 0 {
-        let red = input.read_u8()?;
-        let green = input.read_u8()?;
-        let blue = input.read_u8()?;
-        let alpha = input.read_u8()?;
+        let red = reader.byte()?;
+        let green = reader.byte()?;
+        let blue = reader.byte()?;
+        let alpha = reader.byte()?;
         Some([red, green, blue, alpha])
     } else {
         None

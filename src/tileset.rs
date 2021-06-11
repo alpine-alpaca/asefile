@@ -7,7 +7,7 @@ impl TilesetId {
     fn new(id: u32) -> Self {
         Self(id)
     }
-    fn value(&self) -> &u32 {
+    pub fn value(&self) -> &u32 {
         &self.0
     }
 }

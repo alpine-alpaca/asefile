@@ -1,11 +1,12 @@
 use crate::layer::LayerFlags;
+use crate::reader::AseReader;
 use crate::{
     layer::LayersData, AsepriteFile, AsepriteParseError, ColorPalette, PixelFormat, Result,
 };
-use byteorder::{LittleEndian, ReadBytesExt};
-use flate2::read::ZlibDecoder;
+
 use image::RgbaImage;
-use std::io::{Cursor, Read, Seek, SeekFrom};
+use std::io::Read;
+use std::io::Seek;
 use std::{fmt, ops::DerefMut};
 
 /// A reference to a single Cel. This contains the image data at a specific
@@ -281,23 +282,18 @@ impl fmt::Debug for CelBytes {
     }
 }
 
-fn parse_raw_cel(mut input: Cursor<&[u8]>, pixel_format: PixelFormat) -> Result<CelData> {
-    let width = input.read_u16::<LittleEndian>()?;
-    let height = input.read_u16::<LittleEndian>()?;
+fn parse_raw_cel<R: Read + Seek>(
+    mut reader: AseReader<R>,
+    pixel_format: PixelFormat,
+) -> Result<CelData> {
+    let width = reader.word()?;
+    let height = reader.word()?;
     let data_size = width as usize * height as usize * pixel_format.bytes_per_pixel();
-    let mut output = Vec::with_capacity(data_size);
-    input.take(data_size as u64).read_to_end(&mut output)?;
-    if output.len() != data_size {
-        return Err(AsepriteParseError::InvalidInput(format!(
-            "Invalid cel data size. Expected: {}, Actual: {}",
-            data_size,
-            output.len()
-        )));
-    }
+    let bytes = reader.take_bytes(data_size)?;
     let cel_bytes = CelBytes {
         width,
         height,
-        bytes: output,
+        bytes,
     };
     Ok(match pixel_format {
         PixelFormat::Rgba => CelData::RawRgba(cel_bytes),
@@ -306,11 +302,14 @@ fn parse_raw_cel(mut input: Cursor<&[u8]>, pixel_format: PixelFormat) -> Result<
     })
 }
 
-fn parse_compressed_cel(mut input: Cursor<&[u8]>, pixel_format: PixelFormat) -> Result<CelData> {
-    let width = input.read_u16::<LittleEndian>()?;
-    let height = input.read_u16::<LittleEndian>()?;
+fn parse_compressed_cel<R: Read + Seek>(
+    mut reader: AseReader<R>,
+    pixel_format: PixelFormat,
+) -> Result<CelData> {
+    let width = reader.word()?;
+    let height = reader.word()?;
     let expected_output_size = width as usize * height as usize * pixel_format.bytes_per_pixel();
-    let decoded_data = unzip(input, expected_output_size)?;
+    let decoded_data = reader.unzip(expected_output_size)?;
     let cel_bytes = CelBytes {
         width,
         height,
@@ -323,24 +322,24 @@ fn parse_compressed_cel(mut input: Cursor<&[u8]>, pixel_format: PixelFormat) -> 
     })
 }
 
-fn parse_compressed_tilemap(
-    mut input: Cursor<&[u8]>,
+fn parse_compressed_tilemap<R: Read + Seek>(
+    mut reader: AseReader<R>,
     pixel_format: PixelFormat,
 ) -> Result<CelData> {
     // Compressed tilemap
-    let width = input.read_u16::<LittleEndian>()?;
-    let height = input.read_u16::<LittleEndian>()?;
-    let bits_per_tile = input.read_u16::<LittleEndian>()?;
-    let tile_id_bitmask = input.read_u32::<LittleEndian>()?;
-    let x_flip_bitmask = input.read_u32::<LittleEndian>()?;
-    let y_flip_bitmask = input.read_u32::<LittleEndian>()?;
-    let rotate_90cw_bitmask = input.read_u32::<LittleEndian>()?;
-    // Skip 10 reserved bytes
-    input.seek(SeekFrom::Current(10))?;
+    let width = reader.word()?;
+    let height = reader.word()?;
+    let bits_per_tile = reader.word()?;
+    let tile_id_bitmask = reader.dword()?;
+    let x_flip_bitmask = reader.dword()?;
+    let y_flip_bitmask = reader.dword()?;
+    let rotate_90cw_bitmask = reader.dword()?;
+    // Reserved bytes
+    reader.skip_bytes(10)?;
     // Tiles are 8-bit, 16-bit, or 32-bit
     let bytes_per_tile = bits_per_tile as usize / 8;
     let expected_output_size = width as usize * height as usize * bytes_per_tile;
-    let decoded_data = unzip(input, expected_output_size)?;
+    let decoded_data = reader.unzip(expected_output_size)?;
     let cel_bytes = CelBytes {
         width,
         height,
@@ -362,25 +361,25 @@ fn parse_compressed_tilemap(
 }
 
 pub(crate) fn parse_cel_chunk(data: &[u8], pixel_format: PixelFormat) -> Result<RawCel> {
-    let mut input = Cursor::new(data);
+    let mut reader = AseReader::new(data);
 
-    let layer_index = input.read_u16::<LittleEndian>()?;
-    let x = input.read_i16::<LittleEndian>()?;
-    let y = input.read_i16::<LittleEndian>()?;
-    let opacity = input.read_u8()?;
-    let cel_type = input.read_u16::<LittleEndian>()?;
+    let layer_index = reader.word()?;
+    let x = reader.short()?;
+    let y = reader.short()?;
+    let opacity = reader.byte()?;
+    let cel_type = reader.word()?;
     let mut reserved = [0_u8; 7];
-    input.read_exact(&mut reserved)?;
+    reader.read_exact(&mut reserved)?;
 
     let cel_data = match cel_type {
-        0 => parse_raw_cel(input, pixel_format)?,
+        0 => parse_raw_cel(reader, pixel_format)?,
         1 => {
             // Linked cel
-            let linked = input.read_u16::<LittleEndian>()?;
+            let linked = reader.word()?;
             CelData::Linked(linked)
         }
-        2 => parse_compressed_cel(input, pixel_format)?,
-        3 => parse_compressed_tilemap(input, pixel_format)?,
+        2 => parse_compressed_cel(reader, pixel_format)?,
+        3 => parse_compressed_tilemap(reader, pixel_format)?,
         _ => {
             return Err(AsepriteParseError::InvalidInput(format!(
                 "Invalid/Unsupported Cel type: {}",
@@ -410,11 +409,4 @@ fn dump_bytes(data: &[u8]) {
             println!();
         }
     }
-}
-
-pub(crate) fn unzip(input: Cursor<&[u8]>, expected_output_size: usize) -> Result<Vec<u8>> {
-    let mut decoder = ZlibDecoder::new(input);
-    let mut buffer = Vec::with_capacity(expected_output_size);
-    decoder.read_to_end(&mut buffer)?;
-    Ok(buffer)
 }
