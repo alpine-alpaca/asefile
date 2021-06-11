@@ -222,7 +222,7 @@ fn parse_frame<R: Read>(
             ChunkType::OldPalette04 | ChunkType::OldPalette11 => {
                 // ignore old palette chunks
             }
-            ChunkType::CelExtra | ChunkType::Mask | ChunkType::Path => {
+            ChunkType::CelExtra | ChunkType::Mask | ChunkType::Path | ChunkType::Tileset => {
                 debug!("Ignoring unsupported chunk type: {:?}", chunk_type);
             }
         }
@@ -251,6 +251,7 @@ enum ChunkType {
     UserData,
     Slice,
     ExternalFiles,
+    Tileset,
 }
 
 fn parse_chunk_type(chunk_type: u16) -> Result<ChunkType> {
@@ -268,6 +269,7 @@ fn parse_chunk_type(chunk_type: u16) -> Result<ChunkType> {
         0x2019 => Ok(ChunkType::Palette),
         0x2020 => Ok(ChunkType::UserData),
         0x2022 => Ok(ChunkType::Slice),
+        0x2023 => Ok(ChunkType::Tileset),
         _ => Err(AsepriteParseError::UnsupportedFeature(format!(
             "Invalid or unsupported chunk type: 0x{:x}",
             chunk_type

@@ -107,6 +107,7 @@ pub(crate) mod slice;
 pub(crate) mod tags;
 #[cfg(test)]
 mod tests;
+mod tileset;
 pub(crate) mod user_data;
 
 /// A specialized `Result` type for Aseprite parsing functions.

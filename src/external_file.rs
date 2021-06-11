@@ -12,6 +12,9 @@ impl ExternalFileId {
     fn new(id: u32) -> Self {
         Self(id)
     }
+    fn value(&self) -> &u32 {
+        &self.0
+    }
 }
 
 #[derive(Debug)]
