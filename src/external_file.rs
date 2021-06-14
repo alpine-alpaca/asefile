@@ -7,7 +7,7 @@ use std::ops::Index;
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct ExternalFileId(u32);
 impl ExternalFileId {
-    fn new(id: u32) -> Self {
+    pub(crate) fn new(id: u32) -> Self {
         Self(id)
     }
     pub fn value(&self) -> &u32 {
@@ -21,7 +21,7 @@ pub struct ExternalFile {
     name: String,
 }
 impl ExternalFile {
-    pub fn new(id: ExternalFileId, name: String) -> Self {
+    pub(crate) fn new(id: ExternalFileId, name: String) -> Self {
         Self { id, name }
     }
     pub fn id(&self) -> &ExternalFileId {

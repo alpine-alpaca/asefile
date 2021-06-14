@@ -9,6 +9,7 @@ use crate::{
     cel::{CelBytes, CelsData, TilemapData},
     external_file::{ExternalFile, ExternalFileId, ExternalFilesById},
     layer::{Layer, LayersData},
+    tileset::Tileset,
 };
 use crate::{cel::Cel, *};
 use cel::{CelData, RawCel};
@@ -28,6 +29,7 @@ pub struct AsepriteFile {
     pub(crate) tags: Vec<Tag>,
     pub(crate) framedata: CelsData, // Vec<Vec<cel::RawCel>>,
     pub(crate) external_files: ExternalFilesById,
+    pub(crate) tileset: Option<Tileset>,
 }
 
 /// A reference to a single frame.
@@ -201,6 +203,11 @@ impl AsepriteFile {
             }
         }
         None
+    }
+
+    /// Access the file's Tileset, if one exists.
+    pub fn tileset(&self) -> Option<&Tileset> {
+        self.tileset.as_ref()
     }
 
     // pub fn color_profile(&self) -> Option<&ColorProfile> {
