@@ -68,8 +68,11 @@ impl TilesData {
         if !flags.contains(TilesetFlags::FILE_INCLUDES_TILES) {
             return Ok(None);
         }
+
         let data_length =
             tile_size.width as usize * (tile_size.height as usize * *tile_count as usize);
+        // Currently does not work; needs PIXEL[] refactor from cel module
+        // TODO: Fix this
         reader.unzip(data_length).map(TilesData).map(Some)
     }
 }

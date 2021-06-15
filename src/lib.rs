@@ -103,6 +103,7 @@ pub(crate) mod file;
 pub(crate) mod layer;
 pub(crate) mod palette;
 pub(crate) mod parse;
+mod pixel;
 mod reader;
 pub(crate) mod slice;
 pub(crate) mod tags;

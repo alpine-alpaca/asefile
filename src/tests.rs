@@ -326,6 +326,13 @@ fn palette() {
     assert_eq!(pal.color(71).unwrap().raw_rgba8(), [0, 0, 0, 83]);
 }
 
+#[test]
+fn tileset() {
+    let f = load_test_file("tileset");
+    let ts = f.tileset().unwrap();
+    assert_eq!(ts.name(), "test_tileset");
+}
+
 /*
 #[test]
 fn gen_random_pixels() {
