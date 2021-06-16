@@ -6,7 +6,7 @@ use std::{
 
 use crate::{
     blend::{self, Color8},
-    cel::{CelBytes, CelsData, TilemapData},
+    cel::{CelsData, ImageContent, TilemapData},
     external_file::{ExternalFile, ExternalFileId, ExternalFilesById},
     layer::{Layer, LayersData},
     tileset::Tileset,
@@ -371,10 +371,10 @@ fn blend_mode_to_blend_fn(mode: BlendMode) -> BlendFn {
 fn copy_cel_to_image(
     image: &mut RgbaImage,
     cel: &RawCel,
-    cel_bytes: &CelBytes,
+    cel_bytes: &ImageContent,
     blend_fn: &BlendFn,
 ) {
-    let CelBytes {
+    let ImageContent {
         width,
         height,
         bytes: rgba_data,

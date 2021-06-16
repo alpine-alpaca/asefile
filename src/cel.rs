@@ -219,7 +219,7 @@ impl CelsData {
                             output.push(col.blue());
                             output.push(alpha);
                         }
-                        cel.data = CelData::RawRgba(CelBytes {
+                        cel.data = CelData::RawRgba(ImageContent {
                             width,
                             height,
                             bytes: output,
@@ -251,7 +251,7 @@ pub(crate) struct RawCel {
     pub data: CelData,
 }
 
-pub(crate) struct CelBytes {
+pub(crate) struct ImageContent {
     pub width: u16,
     pub height: u16,
     pub bytes: Vec<u8>,
@@ -259,7 +259,7 @@ pub(crate) struct CelBytes {
 
 #[derive(Debug)]
 pub(crate) struct TilemapData {
-    pub cel_bytes: CelBytes,
+    pub cel_bytes: ImageContent,
     pub bits_per_tile: u16,
     pub tile_id_bitmask: u32,
     pub x_flip_bitmask: u32,
@@ -269,14 +269,14 @@ pub(crate) struct TilemapData {
 
 #[derive(Debug)]
 pub(crate) enum CelData {
-    RawRgba(CelBytes),
-    RawIndexed(CelBytes),
+    RawRgba(ImageContent),
+    RawIndexed(ImageContent),
     Linked(u16),
     Tilemap(TilemapData),
     TilemapIndexed(TilemapData),
 }
 
-impl fmt::Debug for CelBytes {
+impl fmt::Debug for ImageContent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "<{} bytes>", self.bytes.len())
     }
@@ -290,7 +290,7 @@ fn parse_raw_cel<R: Read + Seek>(
     let height = reader.word()?;
     let data_size = width as usize * height as usize * pixel_format.bytes_per_pixel();
     let bytes = reader.take_bytes(data_size)?;
-    let cel_bytes = CelBytes {
+    let cel_bytes = ImageContent {
         width,
         height,
         bytes,
@@ -308,9 +308,10 @@ fn parse_compressed_cel<R: Read + Seek>(
 ) -> Result<CelData> {
     let width = reader.word()?;
     let height = reader.word()?;
-    let expected_output_size = width as usize * height as usize * pixel_format.bytes_per_pixel();
+    let expected_pixel_count = width as usize * height as usize;
+    let expected_output_size = expected_pixel_count * pixel_format.bytes_per_pixel();
     let decoded_data = reader.unzip(expected_output_size)?;
-    let cel_bytes = CelBytes {
+    let cel_bytes = ImageContent {
         width,
         height,
         bytes: decoded_data,
@@ -340,7 +341,7 @@ fn parse_compressed_tilemap<R: Read + Seek>(
     let bytes_per_tile = bits_per_tile as usize / 8;
     let expected_output_size = width as usize * height as usize * bytes_per_tile;
     let decoded_data = reader.unzip(expected_output_size)?;
-    let cel_bytes = CelBytes {
+    let cel_bytes = ImageContent {
         width,
         height,
         bytes: decoded_data,

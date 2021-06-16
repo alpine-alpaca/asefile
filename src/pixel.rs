@@ -1,13 +1,15 @@
 use std::io::{Read, Seek};
+use std::iter::FromIterator;
 
 use crate::{reader::AseReader, PixelFormat};
 use crate::{ColorPalette, Result};
 
+// From Aseprite file spec:
 // PIXEL: One pixel, depending on the image pixel format:
+// Grayscale: BYTE[2], each pixel have 2 bytes in the order Value, Alpha.
+// Indexed: BYTE, Each pixel uses 1 byte (the index).
+// RGBA: BYTE[4], each pixel have 4 bytes in this order Red, Green, Blue, Alpha.
 
-//     RGBA: BYTE[4], each pixel have 4 bytes in this order Red, Green, Blue, Alpha.
-//     Grayscale: BYTE[2], each pixel have 2 bytes in the order Value, Alpha.
-//     Indexed: BYTE, Each pixel uses 1 byte (the index).
 pub struct Rgba {
     red: u8,
     green: u8,
@@ -81,12 +83,14 @@ impl Pixels {
                 Self::Indexed(pixels)
             }
             PixelFormat::Grayscale => {
+                assert!(bytes.len() % 2 == 0);
                 let pixels = bytes.chunks_exact(2).map(Grayscale::new).collect();
-                Pixels::Grayscale(pixels)
+                Self::Grayscale(pixels)
             }
             PixelFormat::Rgba => {
+                assert!(bytes.len() % 4 == 0);
                 let pixels = bytes.chunks_exact(4).map(Rgba::new).collect();
-                Pixels::Rgba(pixels)
+                Self::Rgba(pixels)
             }
         })
     }
