@@ -3,6 +3,9 @@ use byteorder::{LittleEndian, ReadBytesExt};
 use flate2::read::ZlibDecoder;
 use std::io::{Cursor, Read, Seek, SeekFrom};
 
+fn to_ase(e: std::io::Error) -> AsepriteParseError {
+    e.into()
+}
 pub(crate) struct AseReader<T: Read + Seek> {
     input: T,
 }
@@ -20,19 +23,19 @@ where
         Self { input }
     }
     pub(crate) fn byte(&mut self) -> Result<u8> {
-        self.input.read_u8().map_err(|e| e.into())
+        self.input.read_u8().map_err(to_ase)
     }
     pub(crate) fn word(&mut self) -> Result<u16> {
-        self.input.read_u16::<LittleEndian>().map_err(|e| e.into())
+        self.input.read_u16::<LittleEndian>().map_err(to_ase)
     }
     pub(crate) fn short(&mut self) -> Result<i16> {
-        self.input.read_i16::<LittleEndian>().map_err(|e| e.into())
+        self.input.read_i16::<LittleEndian>().map_err(to_ase)
     }
     pub(crate) fn dword(&mut self) -> Result<u32> {
-        self.input.read_u32::<LittleEndian>().map_err(|e| e.into())
+        self.input.read_u32::<LittleEndian>().map_err(to_ase)
     }
     pub(crate) fn long(&mut self) -> Result<i32> {
-        self.input.read_i32::<LittleEndian>().map_err(|e| e.into())
+        self.input.read_i32::<LittleEndian>().map_err(to_ase)
     }
     pub(crate) fn string(&mut self) -> Result<String> {
         let str_len = self.input.read_u16::<LittleEndian>()?;
@@ -42,12 +45,10 @@ where
         Ok(s)
     }
     pub(crate) fn read_exact(&mut self, buffer: &mut [u8]) -> Result<()> {
-        self.input.read_exact(buffer).map_err(|e| e.into())
+        self.input.read_exact(buffer).map_err(to_ase)
     }
     pub(crate) fn skip_bytes(&mut self, count: i64) -> Result<u64> {
-        self.input
-            .seek(SeekFrom::Current(count))
-            .map_err(|e| e.into())
+        self.input.seek(SeekFrom::Current(count)).map_err(to_ase)
     }
     pub(crate) fn take_bytes(self, limit: usize) -> Result<Vec<u8>> {
         let mut output = Vec::with_capacity(limit);

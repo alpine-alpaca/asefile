@@ -130,6 +130,11 @@ pub struct LayerData {
     pub(crate) layer_type: LayerType,
     child_level: u16,
 }
+impl LayerData {
+    pub(crate) fn is_background(&self) -> bool {
+        self.flags.contains(LayerFlags::BACKGROUND)
+    }
+}
 
 #[derive(Debug)]
 pub struct LayersData {

@@ -109,6 +109,7 @@ pub(crate) mod slice;
 pub(crate) mod tags;
 #[cfg(test)]
 mod tests;
+mod tile;
 mod tileset;
 pub(crate) mod user_data;
 

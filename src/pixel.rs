@@ -1,8 +1,5 @@
+use crate::{reader::AseReader, AsepriteParseError, ColorPalette, PixelFormat, Result};
 use std::io::{Read, Seek};
-use std::iter::FromIterator;
-
-use crate::{reader::AseReader, PixelFormat};
-use crate::{ColorPalette, Result};
 
 // From Aseprite file spec:
 // PIXEL: One pixel, depending on the image pixel format:
@@ -10,36 +7,44 @@ use crate::{ColorPalette, Result};
 // Indexed: BYTE, Each pixel uses 1 byte (the index).
 // RGBA: BYTE[4], each pixel have 4 bytes in this order Red, Green, Blue, Alpha.
 
-pub struct Rgba {
-    red: u8,
-    green: u8,
-    blue: u8,
-    alpha: u8,
+pub(crate) struct Rgba {
+    pub red: u8,
+    pub green: u8,
+    pub blue: u8,
+    pub alpha: u8,
 }
 impl Rgba {
-    fn new(chunk: &[u8]) -> Self {
-        Self {
-            red: chunk[0],
-            green: chunk[1],
-            blue: chunk[2],
-            alpha: chunk[3],
-        }
+    fn new(chunk: &[u8]) -> Result<Self> {
+        let mut reader = AseReader::new(chunk);
+        let red = reader.byte()?;
+        let green = reader.byte()?;
+        let blue = reader.byte()?;
+        let alpha = reader.byte()?;
+        Ok(Self {
+            red,
+            green,
+            blue,
+            alpha,
+        })
     }
 }
-pub struct Grayscale {
+pub(crate) struct Grayscale {
     value: u8,
     alpha: u8,
 }
 impl Grayscale {
-    fn new(chunk: &[u8]) -> Self {
-        Self {
-            value: chunk[0],
-            alpha: chunk[1],
-        }
+    fn new(chunk: &[u8]) -> Result<Self> {
+        let mut reader = AseReader::new(chunk);
+        let value = reader.byte()?;
+        let alpha = reader.byte()?;
+        Ok(Self { value, alpha })
     }
 }
-pub struct Indexed(u8);
+pub(crate) struct Indexed(u8);
 impl Indexed {
+    pub(crate) fn value(&self) -> u8 {
+        self.0
+    }
     pub(crate) fn to_rgba(
         &self,
         palette: &ColorPalette,
@@ -63,35 +68,78 @@ impl Indexed {
     }
 }
 
-pub enum Pixels {
+fn output_size(pixel_format: PixelFormat, expected_pixel_count: usize) -> usize {
+    pixel_format.bytes_per_pixel() * expected_pixel_count
+}
+pub(crate) enum Pixels {
     Rgba(Vec<Rgba>),
     Grayscale(Vec<Grayscale>),
     Indexed(Vec<Indexed>),
 }
 impl Pixels {
-    pub(crate) fn unzip<T: Read + Seek>(
-        reader: AseReader<T>,
-        format: PixelFormat,
-        expected_pixel_count: usize,
-    ) -> Result<Self> {
-        let bytes_per_pixel = format.bytes_per_pixel();
-        let expected_output_size = bytes_per_pixel * expected_pixel_count;
-        let bytes = reader.unzip(expected_output_size)?;
-        Ok(match format {
+    fn from_bytes(bytes: Vec<u8>, pixel_format: PixelFormat) -> Result<Self> {
+        match pixel_format {
             PixelFormat::Indexed { .. } => {
                 let pixels = bytes.iter().map(|byte| Indexed(*byte)).collect();
-                Self::Indexed(pixels)
+                Ok(Self::Indexed(pixels))
             }
             PixelFormat::Grayscale => {
                 assert!(bytes.len() % 2 == 0);
-                let pixels = bytes.chunks_exact(2).map(Grayscale::new).collect();
-                Self::Grayscale(pixels)
+                let pixels: Result<Vec<_>> = bytes.chunks_exact(2).map(Grayscale::new).collect();
+                pixels.map(Self::Grayscale)
             }
             PixelFormat::Rgba => {
                 assert!(bytes.len() % 4 == 0);
-                let pixels = bytes.chunks_exact(4).map(Rgba::new).collect();
-                Self::Rgba(pixels)
+                let pixels: Result<Vec<_>> = bytes.chunks_exact(4).map(Rgba::new).collect();
+                pixels.map(Self::Rgba)
             }
-        })
+        }
     }
+    pub(crate) fn from_raw<T: Read + Seek>(
+        reader: AseReader<T>,
+        pixel_format: PixelFormat,
+        expected_pixel_count: usize,
+    ) -> Result<Self> {
+        let expected_output_size = output_size(pixel_format, expected_pixel_count);
+        reader
+            .take_bytes(expected_output_size)
+            .and_then(|bytes| Self::from_bytes(bytes, pixel_format))
+    }
+    pub(crate) fn from_compressed<T: Read + Seek>(
+        reader: AseReader<T>,
+        pixel_format: PixelFormat,
+        expected_pixel_count: usize,
+    ) -> Result<Self> {
+        let expected_output_size = output_size(pixel_format, expected_pixel_count);
+        reader
+            .unzip(expected_output_size)
+            .and_then(|bytes| Self::from_bytes(bytes, pixel_format))
+    }
+    pub(crate) fn byte_count(&self) -> usize {
+        match self {
+            Pixels::Rgba(v) => v.len() * 4,
+            Pixels::Grayscale(v) => v.len() * 2,
+            Pixels::Indexed(v) => v.len(),
+        }
+    }
+}
+
+pub(crate) fn resolve_indexed(
+    pixels: &Vec<Indexed>,
+    palette: &ColorPalette,
+    transparent_color_index: u8,
+    layer_is_background: bool,
+) -> Result<Vec<Rgba>> {
+    let max_col = palette.num_colors();
+    pixels
+        .iter()
+        .map(|px| {
+            px.to_rgba(palette, transparent_color_index, layer_is_background)
+                .ok_or(AsepriteParseError::InvalidInput(format!(
+                    "Index out of range: {} (max: {})",
+                    px.value(),
+                    max_col
+                )))
+        })
+        .collect()
 }

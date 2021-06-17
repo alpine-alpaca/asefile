@@ -1,5 +1,6 @@
-use crate::layer::LayerFlags;
+use crate::pixel::{self, Pixels};
 use crate::reader::AseReader;
+use crate::tile::{TileSize, Tiles};
 use crate::{
     layer::LayersData, AsepriteFile, AsepriteParseError, ColorPalette, PixelFormat, Result,
 };
@@ -136,23 +137,26 @@ impl CelsData {
         let layers = &self.data[frame as usize];
         if let Some(ref cel) = layers[layer] {
             match &cel.data {
-                CelData::RawRgba { .. } => {
-                    // TODO: Verify data length
+                CelData::Raw(image_content) => {
+                    match image_content.pixels {
+                        Pixels::Rgba(_) => {
+                            // TODO: Verify data length
+                        }
+                        Pixels::Grayscale(_) => todo!(),
+                        Pixels::Indexed(_) => {
+                            return Err(AsepriteParseError::InvalidInput("Internal error: unresolved Indexed data".into()));
+                        },
+                    }
+
                 },
-                CelData::RawIndexed { .. } => {
-                    return Err(AsepriteParseError::InvalidInput("Internal error: unresolved Indexed data".into()));
-                }
                 CelData::Linked(other_frame) => {
                     match self.cel(*other_frame, layer as u16) {
                         Some(other_cel) => {
-                            match &other_cel.data {
-                                CelData::RawRgba {..} | CelData::RawIndexed {..} => {}, | CelData::Tilemap { .. } => {}, | CelData::TilemapIndexed {..} => {},
-                                CelData::Linked(_) => {
-                                    return Err(AsepriteParseError::InvalidInput(
-                                        format!("Invalid Cel reference. Cel (f:{},l:{}) links to cel (f:{},l:{}) but that cel links to another cel.",
-                                    frame, layer, *other_frame, layer)
-                                    ))
-                                }
+                            if let CelData::Linked(_) = &other_cel.data {
+                                return Err(AsepriteParseError::InvalidInput(
+                                    format!("Invalid Cel reference. Cel (f:{},l:{}) links to cel (f:{},l:{}) but that cel links to another cel.",
+                                frame, layer, *other_frame, layer)
+                                ))
                             }
                         }
                         None => {
@@ -164,9 +168,6 @@ impl CelsData {
                     }
                 }
                 CelData::Tilemap { .. } => {
-                    // TODO: Verify
-                }
-                CelData::TilemapIndexed { .. } => {
                     // TODO: Verify
                 }
             }
@@ -192,38 +193,21 @@ impl CelsData {
             let layers = &mut self.data[frame as usize];
             for mut cel in layers {
                 if let Some(cel) = cel.deref_mut() {
-                    if let CelData::RawIndexed(cel_bytes) = &cel.data {
-                        let width = cel_bytes.width;
-                        let height = cel_bytes.height;
-                        let data = &cel_bytes.bytes;
-                        let mut output: Vec<u8> = Vec::with_capacity(4 * data.len());
-                        let layer_is_background = layer_info[cel.layer_index as u32]
-                            .flags
-                            .contains(LayerFlags::BACKGROUND);
-                        for index in data {
-                            if *index as u32 >= max_col {
-                                return Err(AsepriteParseError::InvalidInput(format!(
-                                    "Index out of range: {} (max: {})",
-                                    *index, max_col
-                                )));
-                            }
-                            let col = palette.color(*index as u32).unwrap();
-                            let alpha = if *index == transparent_color_index && !layer_is_background
-                            {
-                                0
-                            } else {
-                                col.alpha()
-                            };
-                            output.push(col.red());
-                            output.push(col.green());
-                            output.push(col.blue());
-                            output.push(alpha);
+                    if let CelData::Raw(data) = &cel.data {
+                        if let Pixels::Indexed(pixels) = &data.pixels {
+                            let layer = &layer_info[cel.layer_index as u32];
+                            let layer_is_background = layer.is_background();
+                            let rgba_pixels = pixel::resolve_indexed(
+                                pixels,
+                                palette,
+                                transparent_color_index,
+                                layer_is_background,
+                            )?;
+                            cel.data = CelData::Raw(ImageContent {
+                                size: data.size,
+                                pixels: Pixels::Rgba(rgba_pixels),
+                            })
                         }
-                        cel.data = CelData::RawRgba(ImageContent {
-                            width,
-                            height,
-                            bytes: output,
-                        });
                     }
                 }
             }
@@ -250,16 +234,31 @@ pub(crate) struct RawCel {
     pub opacity: u8,
     pub data: CelData,
 }
-
-pub(crate) struct ImageContent {
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct ImageSize {
     pub width: u16,
     pub height: u16,
-    pub bytes: Vec<u8>,
+}
+impl ImageSize {
+    fn parse<R: Read + Seek>(reader: &mut AseReader<R>) -> Result<Self> {
+        let width = reader.word()?;
+        let height = reader.word()?;
+        Ok(Self { width, height })
+    }
+    fn pixel_count(&self) -> usize {
+        self.width as usize * self.height as usize
+    }
+}
+
+pub(crate) struct ImageContent {
+    pub size: ImageSize,
+    pub pixels: Pixels,
 }
 
 #[derive(Debug)]
 pub(crate) struct TilemapData {
-    pub cel_bytes: ImageContent,
+    pub size: ImageSize,
+    pub tiles: Tiles,
     pub bits_per_tile: u16,
     pub tile_id_bitmask: u32,
     pub x_flip_bitmask: u32,
@@ -269,67 +268,56 @@ pub(crate) struct TilemapData {
 
 #[derive(Debug)]
 pub(crate) enum CelData {
-    RawRgba(ImageContent),
-    RawIndexed(ImageContent),
+    Raw(ImageContent),
     Linked(u16),
     Tilemap(TilemapData),
-    TilemapIndexed(TilemapData),
+}
+impl CelData {
+    fn parse<R: Read + Seek>(
+        mut reader: AseReader<R>,
+        pixel_format: PixelFormat,
+        cel_type: u16,
+    ) -> Result<Self> {
+        match cel_type {
+            0 => parse_raw_cel(reader, pixel_format).map(CelData::Raw),
+            1 => reader.word().map(CelData::Linked),
+            2 => parse_compressed_cel(reader, pixel_format).map(CelData::Raw),
+            3 => parse_compressed_tilemap(reader).map(CelData::Tilemap),
+            _ => Err(AsepriteParseError::InvalidInput(format!(
+                "Invalid/Unsupported Cel type: {}",
+                cel_type
+            ))),
+        }
+    }
 }
 
 impl fmt::Debug for ImageContent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "<{} bytes>", self.bytes.len())
+        write!(f, "<{} bytes>", self.pixels.byte_count())
     }
 }
 
 fn parse_raw_cel<R: Read + Seek>(
     mut reader: AseReader<R>,
     pixel_format: PixelFormat,
-) -> Result<CelData> {
-    let width = reader.word()?;
-    let height = reader.word()?;
-    let data_size = width as usize * height as usize * pixel_format.bytes_per_pixel();
-    let bytes = reader.take_bytes(data_size)?;
-    let cel_bytes = ImageContent {
-        width,
-        height,
-        bytes,
-    };
-    Ok(match pixel_format {
-        PixelFormat::Rgba => CelData::RawRgba(cel_bytes),
-        PixelFormat::Grayscale => CelData::RawRgba(cel_bytes),
-        PixelFormat::Indexed { .. } => CelData::RawIndexed(cel_bytes),
-    })
+) -> Result<ImageContent> {
+    let size = ImageSize::parse(&mut reader)?;
+    Pixels::from_raw(reader, pixel_format, size.pixel_count())
+        .map(|pixels| ImageContent { size, pixels })
 }
 
 fn parse_compressed_cel<R: Read + Seek>(
     mut reader: AseReader<R>,
     pixel_format: PixelFormat,
-) -> Result<CelData> {
-    let width = reader.word()?;
-    let height = reader.word()?;
-    let expected_pixel_count = width as usize * height as usize;
-    let expected_output_size = expected_pixel_count * pixel_format.bytes_per_pixel();
-    let decoded_data = reader.unzip(expected_output_size)?;
-    let cel_bytes = ImageContent {
-        width,
-        height,
-        bytes: decoded_data,
-    };
-    Ok(match pixel_format {
-        PixelFormat::Rgba => CelData::RawRgba(cel_bytes),
-        PixelFormat::Grayscale => CelData::RawRgba(cel_bytes),
-        PixelFormat::Indexed { .. } => CelData::RawIndexed(cel_bytes),
-    })
+) -> Result<ImageContent> {
+    let size = ImageSize::parse(&mut reader)?;
+    Pixels::from_compressed(reader, pixel_format, size.pixel_count())
+        .map(|pixels| ImageContent { size, pixels })
 }
 
-fn parse_compressed_tilemap<R: Read + Seek>(
-    mut reader: AseReader<R>,
-    pixel_format: PixelFormat,
-) -> Result<CelData> {
+fn parse_compressed_tilemap<R: Read + Seek>(mut reader: AseReader<R>) -> Result<TilemapData> {
     // Compressed tilemap
-    let width = reader.word()?;
-    let height = reader.word()?;
+    let size = ImageSize::parse(&mut reader)?;
     let bits_per_tile = reader.word()?;
     let tile_id_bitmask = reader.dword()?;
     let x_flip_bitmask = reader.dword()?;
@@ -337,27 +325,15 @@ fn parse_compressed_tilemap<R: Read + Seek>(
     let rotate_90cw_bitmask = reader.dword()?;
     // Reserved bytes
     reader.skip_bytes(10)?;
-    // Tiles are 8-bit, 16-bit, or 32-bit
-    let bytes_per_tile = bits_per_tile as usize / 8;
-    let expected_output_size = width as usize * height as usize * bytes_per_tile;
-    let decoded_data = reader.unzip(expected_output_size)?;
-    let cel_bytes = ImageContent {
-        width,
-        height,
-        bytes: decoded_data,
-    };
-    let tilemap_data = TilemapData {
-        cel_bytes,
+    let tile_size = TileSize::from_bits_per_tile(bits_per_tile as usize)?;
+    Tiles::unzip(reader, tile_size, size.pixel_count()).map(|tiles| TilemapData {
+        size,
+        tiles,
         bits_per_tile,
         tile_id_bitmask,
         x_flip_bitmask,
         y_flip_bitmask,
         rotate_90cw_bitmask,
-    };
-    Ok(match pixel_format {
-        PixelFormat::Rgba => CelData::Tilemap(tilemap_data),
-        PixelFormat::Grayscale => CelData::Tilemap(tilemap_data),
-        PixelFormat::Indexed { .. } => CelData::TilemapIndexed(tilemap_data),
     })
 }
 
@@ -369,32 +345,15 @@ pub(crate) fn parse_cel_chunk(data: &[u8], pixel_format: PixelFormat) -> Result<
     let y = reader.short()?;
     let opacity = reader.byte()?;
     let cel_type = reader.word()?;
-    let mut reserved = [0_u8; 7];
-    reader.read_exact(&mut reserved)?;
+    // Reserved bytes
+    reader.skip_bytes(7)?;
 
-    let cel_data = match cel_type {
-        0 => parse_raw_cel(reader, pixel_format)?,
-        1 => {
-            // Linked cel
-            let linked = reader.word()?;
-            CelData::Linked(linked)
-        }
-        2 => parse_compressed_cel(reader, pixel_format)?,
-        3 => parse_compressed_tilemap(reader, pixel_format)?,
-        _ => {
-            return Err(AsepriteParseError::InvalidInput(format!(
-                "Invalid/Unsupported Cel type: {}",
-                cel_type
-            )))
-        }
-    };
-
-    Ok(RawCel {
+    CelData::parse(reader, pixel_format, cel_type).map(|data| RawCel {
         layer_index,
         x,
         y,
         opacity,
-        data: cel_data,
+        data,
     })
 }
 
