@@ -1,6 +1,6 @@
 use crate::pixel::{self, Pixels};
 use crate::reader::AseReader;
-use crate::tile::{TileSize, Tiles};
+use crate::tilemap::Tilemap;
 use crate::{
     layer::LayersData, AsepriteFile, AsepriteParseError, ColorPalette, PixelFormat, Result,
 };
@@ -240,12 +240,12 @@ pub(crate) struct ImageSize {
     pub height: u16,
 }
 impl ImageSize {
-    fn parse<R: Read + Seek>(reader: &mut AseReader<R>) -> Result<Self> {
+    pub(crate) fn parse<R: Read + Seek>(reader: &mut AseReader<R>) -> Result<Self> {
         let width = reader.word()?;
         let height = reader.word()?;
         Ok(Self { width, height })
     }
-    fn pixel_count(&self) -> usize {
+    pub(crate) fn pixel_count(&self) -> usize {
         self.width as usize * self.height as usize
     }
 }
@@ -256,21 +256,10 @@ pub(crate) struct ImageContent {
 }
 
 #[derive(Debug)]
-pub(crate) struct TilemapData {
-    pub size: ImageSize,
-    pub tiles: Tiles,
-    pub bits_per_tile: u16,
-    pub tile_id_bitmask: u32,
-    pub x_flip_bitmask: u32,
-    pub y_flip_bitmask: u32,
-    pub rotate_90cw_bitmask: u32,
-}
-
-#[derive(Debug)]
 pub(crate) enum CelData {
     Raw(ImageContent),
     Linked(u16),
-    Tilemap(TilemapData),
+    Tilemap(Tilemap),
 }
 impl CelData {
     fn parse<R: Read + Seek>(
@@ -282,7 +271,7 @@ impl CelData {
             0 => parse_raw_cel(reader, pixel_format).map(CelData::Raw),
             1 => reader.word().map(CelData::Linked),
             2 => parse_compressed_cel(reader, pixel_format).map(CelData::Raw),
-            3 => parse_compressed_tilemap(reader).map(CelData::Tilemap),
+            3 => Tilemap::parse_chunk(reader).map(CelData::Tilemap),
             _ => Err(AsepriteParseError::InvalidInput(format!(
                 "Invalid/Unsupported Cel type: {}",
                 cel_type
@@ -313,28 +302,6 @@ fn parse_compressed_cel<R: Read + Seek>(
     let size = ImageSize::parse(&mut reader)?;
     Pixels::from_compressed(reader, pixel_format, size.pixel_count())
         .map(|pixels| ImageContent { size, pixels })
-}
-
-fn parse_compressed_tilemap<R: Read + Seek>(mut reader: AseReader<R>) -> Result<TilemapData> {
-    // Compressed tilemap
-    let size = ImageSize::parse(&mut reader)?;
-    let bits_per_tile = reader.word()?;
-    let tile_id_bitmask = reader.dword()?;
-    let x_flip_bitmask = reader.dword()?;
-    let y_flip_bitmask = reader.dword()?;
-    let rotate_90cw_bitmask = reader.dword()?;
-    // Reserved bytes
-    reader.skip_bytes(10)?;
-    let tile_size = TileSize::from_bits_per_tile(bits_per_tile as usize)?;
-    Tiles::unzip(reader, tile_size, size.pixel_count()).map(|tiles| TilemapData {
-        size,
-        tiles,
-        bits_per_tile,
-        tile_id_bitmask,
-        x_flip_bitmask,
-        y_flip_bitmask,
-        rotate_90cw_bitmask,
-    })
 }
 
 pub(crate) fn parse_cel_chunk(data: &[u8], pixel_format: PixelFormat) -> Result<RawCel> {

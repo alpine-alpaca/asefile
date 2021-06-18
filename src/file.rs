@@ -9,6 +9,7 @@ use crate::{
     cel::{CelsData, ImageContent, ImageSize},
     external_file::{ExternalFile, ExternalFileId, ExternalFilesById},
     layer::{Layer, LayersData},
+    tilemap::Tilemap,
     tileset::Tileset,
 };
 use crate::{cel::Cel, *};
@@ -246,7 +247,13 @@ impl AsepriteFile {
                             let ImageContent { size, pixels } = image_content;
                             match pixels {
                                 pixel::Pixels::Rgba(pixels) => {
-                                    copy_cel_to_image(image, cel, size, pixels, &blend_fn);
+                                    copy_raw_cel_to_image(
+                                        image,
+                                        cel,
+                                        image_content,
+                                        pixels,
+                                        &blend_fn,
+                                    );
                                 }
                                 pixel::Pixels::Grayscale(_) => {
                                     panic!("Grayscale cel. Should have been caught by validate()");
@@ -376,29 +383,32 @@ fn blend_mode_to_blend_fn(mode: BlendMode) -> BlendFn {
     }
 }
 
-fn copy_cel_to_image(
+fn copy_tilemap_cel_to_image(
     image: &mut RgbaImage,
     cel: &RawCel,
+    tilemap_data: &Tilemap,
     size: &ImageSize,
     pixels: &Vec<crate::pixel::Rgba>,
     blend_fn: &BlendFn,
 ) {
+    todo!()
+}
+
+fn copy_raw_cel_to_image(
+    image: &mut RgbaImage,
+    cel: &RawCel,
+    image_content: &ImageContent,
+    pixels: &Vec<crate::pixel::Rgba>,
+    blend_fn: &BlendFn,
+) {
+    let size = image_content.size;
     let ImageSize { width, height } = size;
     let x0 = cel.x as i32;
     let y0 = cel.y as i32;
     let opacity = cel.opacity;
-    let x_end = x0 + (*width as i32);
-    let y_end = y0 + (*height as i32);
-    // let x0 = x0.max(0);
-    // let y0 = y0.max(0);
-    //assert!(x0 >= 0 && y0 >= 0);
+    let x_end = x0 + (width as i32);
+    let y_end = y0 + (height as i32);
     let (img_width, img_height) = image.dimensions();
-    // assert!(x_end <= img_width as i32);
-    // assert!(y_end <= img_height as i32);
-    // println!(
-    //     "======> Writing cel: x:{}..{}, y:{}..{}",
-    //     x0, x_end, y0, y_end
-    // );
 
     for y in y0..y_end {
         if y < 0 || y >= img_height as i32 {
@@ -408,21 +418,31 @@ fn copy_cel_to_image(
             if x < 0 || x >= img_width as i32 {
                 continue;
             }
-            let idx = (y - y0) as usize * *width as usize + (x - x0) as usize;
+            let idx = (y - y0) as usize * width as usize + (x - x0) as usize;
             let pixel = &pixels[idx];
             let image_pixel = Rgba::from_channels(pixel.red, pixel.green, pixel.blue, pixel.alpha);
 
             let src = *image.get_pixel(x as u32, y as u32);
             let new = blend_fn(src, image_pixel, opacity);
             image.put_pixel(x as u32, y as u32, new);
+        }
+    }
+}
 
-            // let new = image.get_pixel(x as u32, y as u32);
-            // if x == 5 && y == 8 {
-            //     println!(
-            //         "**** src={:?},\n   pixel={:?}, opacity={},\n     new={:?}",
-            //         src, pixel, opacity, new
-            //     );
-            // }
+fn copy_cel_to_image(
+    image: &mut RgbaImage,
+    cel: &RawCel,
+    size: &ImageSize,
+    pixels: &Vec<crate::pixel::Rgba>,
+    blend_fn: &BlendFn,
+) {
+    match &cel.data {
+        CelData::Raw(image_content) => {
+            copy_raw_cel_to_image(image, cel, &image_content, pixels, blend_fn);
+        }
+        CelData::Linked(_) => todo!(),
+        CelData::Tilemap(tilemap_data) => {
+            copy_tilemap_cel_to_image(image, cel, &tilemap_data, size, pixels, blend_fn);
         }
     }
 }

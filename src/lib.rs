@@ -110,6 +110,7 @@ pub(crate) mod tags;
 #[cfg(test)]
 mod tests;
 mod tile;
+mod tilemap;
 mod tileset;
 pub(crate) mod user_data;
 
