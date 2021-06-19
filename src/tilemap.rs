@@ -1,25 +1,29 @@
 use std::io::{Read, Seek};
 
-use crate::{cel::ImageSize, reader::AseReader, tile, Result};
+use crate::{reader::AseReader, tile, Result};
 
 #[derive(Debug)]
 pub(crate) struct Tilemap {
-    pub size: ImageSize,
+    pub width: u16,  // width in number of tiles
+    pub height: u16, // height in number of tiles
     pub tiles: tile::Tiles,
     pub bits_per_tile: u16,
     pub bitmask_header: TileBitmaskHeader,
 }
 impl Tilemap {
     pub(crate) fn parse_chunk<R: Read + Seek>(mut reader: AseReader<R>) -> Result<Self> {
-        let size = ImageSize::parse(&mut reader)?;
+        let width = reader.word()?;
+        let height = reader.word()?;
         let bits_per_tile = reader.word()?;
+        assert!(bits_per_tile == 32, "Expected 32 bits per tile");
         let bitmask_header = TileBitmaskHeader::parse(&mut reader)?;
         // Reserved bytes
         reader.skip_bytes(10)?;
-        let tile_size = tile::TileLength::from_bits_per_tile(bits_per_tile as usize)?;
-        let tiles = tile::Tiles::unzip(reader, tile_size, size.pixel_count())?;
+        let expected_tile_count = width as usize * height as usize;
+        let tiles = tile::Tiles::unzip(reader, expected_tile_count, &bitmask_header)?;
         Ok(Self {
-            size,
+            width,
+            height,
             tiles,
             bits_per_tile,
             bitmask_header,
@@ -35,7 +39,7 @@ pub(crate) struct TileBitmaskHeader {
     pub rotate_90cw: u32,
 }
 impl TileBitmaskHeader {
-    pub(crate) fn parse<R: Read + Seek>(mut reader: &mut AseReader<R>) -> Result<Self> {
+    pub(crate) fn parse<R: Read + Seek>(reader: &mut AseReader<R>) -> Result<Self> {
         let tile_id = reader.dword()?;
         let x_flip = reader.dword()?;
         let y_flip = reader.dword()?;

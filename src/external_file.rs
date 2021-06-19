@@ -49,10 +49,10 @@ impl ExternalFile {
 #[derive(Debug)]
 pub struct ExternalFilesById(HashMap<ExternalFileId, ExternalFile>);
 impl ExternalFilesById {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self(HashMap::new())
     }
-    pub fn add(&mut self, external_file: ExternalFile) {
+    pub(crate) fn add(&mut self, external_file: ExternalFile) {
         self.0.insert(*external_file.id(), external_file);
     }
     pub fn map(&self) -> &HashMap<ExternalFileId, ExternalFile> {

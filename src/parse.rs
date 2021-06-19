@@ -1,6 +1,6 @@
 use crate::external_file::{ExternalFile, ExternalFilesById};
 use crate::reader::AseReader;
-use crate::tileset::Tileset;
+use crate::tileset::{Tileset, TilesetsById};
 use crate::{error::AsepriteParseError, AsepriteFile, PixelFormat};
 use log::debug;
 use std::io::{Read, Seek};
@@ -16,7 +16,7 @@ struct ParseInfo {
     frame_times: Vec<u16>,
     tags: Option<Vec<Tag>>,
     external_files: ExternalFilesById,
-    tileset: Option<Tileset>,
+    tileset: TilesetsById,
 }
 
 impl ParseInfo {
@@ -83,7 +83,7 @@ pub fn read_aseprite<R: Read + Seek>(input: R) -> Result<AsepriteFile> {
         frame_times: vec![default_frame_time; num_frames as usize],
         tags: None,
         external_files: ExternalFilesById::new(),
-        tileset: None,
+        tileset: TilesetsById::new(),
     };
 
     let pixel_format = parse_pixel_format(color_depth, transparent_color_index)?;
@@ -136,7 +136,7 @@ pub fn read_aseprite<R: Read + Seek>(input: R) -> Result<AsepriteFile> {
         palette: parse_info.palette,
         tags: parse_info.tags.unwrap_or_default(),
         external_files: parse_info.external_files,
-        tileset: parse_info.tileset,
+        tilesets: parse_info.tileset,
     })
 }
 
@@ -229,7 +229,7 @@ fn parse_frame<R: Read + Seek>(
             }
             ChunkType::Tileset => {
                 let tileset = Tileset::parse_chunk(&chunk_data)?;
-                parse_info.tileset = Some(tileset);
+                parse_info.tileset.add(tileset);
             }
             ChunkType::CelExtra | ChunkType::Mask | ChunkType::Path => {
                 debug!("Ignoring unsupported chunk type: {:?}", chunk_type);

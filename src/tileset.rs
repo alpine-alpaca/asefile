@@ -1,4 +1,8 @@
-use std::io::{Read, Seek};
+use std::{
+    collections::HashMap,
+    io::{Read, Seek},
+    ops::Index,
+};
 
 use crate::Result;
 use bitflags::bitflags;
@@ -7,6 +11,9 @@ use crate::{external_file::ExternalFileId, reader::AseReader};
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct TilesetId(u32);
 impl TilesetId {
+    pub(crate) fn new(value: u32) -> Self {
+        Self(value)
+    }
     pub fn value(&self) -> &u32 {
         &self.0
     }
@@ -154,5 +161,28 @@ impl Tileset {
             external_file,
             tiles_data,
         })
+    }
+}
+#[derive(Debug)]
+pub struct TilesetsById(HashMap<TilesetId, Tileset>);
+impl TilesetsById {
+    pub(crate) fn new() -> Self {
+        Self(HashMap::new())
+    }
+    pub(crate) fn add(&mut self, tileset: Tileset) {
+        self.0.insert(*tileset.id(), tileset);
+    }
+    pub fn map(&self) -> &HashMap<TilesetId, Tileset> {
+        &self.0
+    }
+}
+impl Index<TilesetId> for TilesetsById {
+    type Output = Tileset;
+    fn index(&self, id: TilesetId) -> &Self::Output {
+        let map = self.map();
+        if map.contains_key(&id) {
+            return &self.map()[&id];
+        }
+        panic!("no external file found for id")
     }
 }

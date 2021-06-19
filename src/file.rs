@@ -6,14 +6,14 @@ use std::{
 
 use crate::{
     blend::{self, Color8},
-    cel::{CelsData, ImageContent, ImageSize},
+    cel::{CelData, CelsData, ImageContent, ImageSize},
     external_file::{ExternalFile, ExternalFileId, ExternalFilesById},
     layer::{Layer, LayersData},
     tilemap::Tilemap,
-    tileset::Tileset,
+    tileset::{Tileset, TilesetsById},
 };
 use crate::{cel::Cel, *};
-use cel::{CelData, RawCel};
+use cel::{CelContent, RawCel};
 use image::{Pixel, Rgba, RgbaImage};
 
 /// A parsed Aseprite file.
@@ -30,7 +30,7 @@ pub struct AsepriteFile {
     pub(crate) tags: Vec<Tag>,
     pub(crate) framedata: CelsData, // Vec<Vec<cel::RawCel>>,
     pub(crate) external_files: ExternalFilesById,
-    pub(crate) tileset: Option<Tileset>,
+    pub(crate) tilesets: TilesetsById,
 }
 
 /// A reference to a single frame.
@@ -206,9 +206,9 @@ impl AsepriteFile {
         None
     }
 
-    /// Access the file's Tileset, if one exists.
-    pub fn tileset(&self) -> Option<&Tileset> {
-        self.tileset.as_ref()
+    /// Access the file's Tilesets.
+    pub fn tilesets(&self) -> &TilesetsById {
+        &self.tilesets
     }
 
     // pub fn color_profile(&self) -> Option<&ColorProfile> {
@@ -229,56 +229,23 @@ impl AsepriteFile {
             if !self.layer(layer_id).is_visible() {
                 continue;
             }
-            self.copy_cel(&mut image, cel);
+            self.write_cel(&mut image, cel);
         }
 
         image
     }
 
-    fn copy_cel(&self, image: &mut RgbaImage, cel: &RawCel) {
+    fn write_cel(&self, image: &mut RgbaImage, cel: &RawCel) {
         assert!(self.pixel_format != PixelFormat::Grayscale);
-        let layer = self.layer(cel.layer_index as u32);
-        let blend_fn = blend_mode_to_blend_fn(layer.blend_mode());
-        match &cel.data {
-            CelData::Linked(frame) => {
-                for cel in self.framedata.cel(*frame, cel.layer_index) {
-                    match &cel.data {
-                        CelData::Raw(image_content) => {
-                            let ImageContent { size, pixels } = image_content;
-                            match pixels {
-                                pixel::Pixels::Rgba(pixels) => {
-                                    copy_raw_cel_to_image(
-                                        image,
-                                        cel,
-                                        image_content,
-                                        pixels,
-                                        &blend_fn,
-                                    );
-                                }
-                                pixel::Pixels::Grayscale(_) => {
-                                    panic!("Grayscale cel. Should have been caught by validate()");
-                                }
-                                pixel::Pixels::Indexed(_) => {
-                                    panic!(
-                                        "Indexed data cel. Should have been caught by validate()"
-                                    );
-                                }
-                            }
-                        }
-                        CelData::Tilemap(_tilemap_data) => {
-                            todo!()
-                        }
-                        CelData::Linked(_) => {
-                            panic!("Cel links to empty cel. Should have been caught by validate()");
-                        }
-                    }
-                }
-            }
-            CelData::Raw(image_content) => {
+        let RawCel { data, content } = cel;
+        let layer = self.layer(data.layer_index as u32);
+        let blend_mode = layer.blend_mode();
+        match &content {
+            CelContent::Raw(image_content) => {
                 let ImageContent { size, pixels } = image_content;
                 match pixels {
                     pixel::Pixels::Rgba(pixels) => {
-                        copy_cel_to_image(image, cel, size, pixels, &blend_fn);
+                        write_raw_cel_to_image(image, data, size, pixels, &blend_mode);
                     }
                     pixel::Pixels::Grayscale(_) => {
                         panic!("Grayscale cel. Should have been caught by validate()");
@@ -288,8 +255,23 @@ impl AsepriteFile {
                     }
                 }
             }
-            CelData::Tilemap(_tilemap_data) => {
-                todo!()
+            CelContent::Tilemap(tilemap_data) => {
+                if let layer::LayerType::Tilemap(tileset_id) = layer.layer_type() {
+                    let tileset = &self.tilesets()[tileset_id];
+                    write_tilemap_cel_to_image(image, data, tilemap_data, tileset, &blend_mode)
+                } else {
+                    panic!("Tried to parse Tilemap Cel, but layer has no associated tileset");
+                }
+            }
+            CelContent::Linked(frame) => {
+                if let Some(cel) = self.framedata.cel(*frame, data.layer_index) {
+                    if let CelContent::Linked(_) = cel.content {
+                        panic!("Cel links to empty cel. Should have been caught by validate()");
+                    } else {
+                        // Recurse once with the source non-Linked cel
+                        self.write_cel(image, cel);
+                    }
+                }
             }
         }
     }
@@ -297,7 +279,7 @@ impl AsepriteFile {
     pub(crate) fn layer_image(&self, frame: u16, layer_id: usize) -> RgbaImage {
         let mut image = RgbaImage::new(self.width as u32, self.height as u32);
         for cel in self.framedata.cel(frame, layer_id as u16) {
-            self.copy_cel(&mut image, cel);
+            self.write_cel(&mut image, cel);
         }
         image
     }
@@ -383,31 +365,31 @@ fn blend_mode_to_blend_fn(mode: BlendMode) -> BlendFn {
     }
 }
 
-fn copy_tilemap_cel_to_image(
+fn write_tilemap_cel_to_image(
     image: &mut RgbaImage,
-    cel: &RawCel,
+    cel: &CelData,
     tilemap_data: &Tilemap,
-    size: &ImageSize,
-    pixels: &Vec<crate::pixel::Rgba>,
-    blend_fn: &BlendFn,
+    tileset: &Tileset,
+    blend_mode: &BlendMode,
 ) {
+    let blend_fn = blend_mode_to_blend_fn(*blend_mode);
     todo!()
 }
 
-fn copy_raw_cel_to_image(
+fn write_raw_cel_to_image(
     image: &mut RgbaImage,
-    cel: &RawCel,
-    image_content: &ImageContent,
+    cel_data: &CelData,
+    image_size: &ImageSize,
     pixels: &Vec<crate::pixel::Rgba>,
-    blend_fn: &BlendFn,
+    blend_mode: &BlendMode,
 ) {
-    let size = image_content.size;
-    let ImageSize { width, height } = size;
-    let x0 = cel.x as i32;
-    let y0 = cel.y as i32;
-    let opacity = cel.opacity;
-    let x_end = x0 + (width as i32);
-    let y_end = y0 + (height as i32);
+    let ImageSize { width, height } = image_size;
+    let CelData { x, y, opacity, .. } = cel_data;
+    let blend_fn = blend_mode_to_blend_fn(*blend_mode);
+    let x0 = *x as i32;
+    let y0 = *y as i32;
+    let x_end = x0 + (*width as i32);
+    let y_end = y0 + (*height as i32);
     let (img_width, img_height) = image.dimensions();
 
     for y in y0..y_end {
@@ -418,31 +400,13 @@ fn copy_raw_cel_to_image(
             if x < 0 || x >= img_width as i32 {
                 continue;
             }
-            let idx = (y - y0) as usize * width as usize + (x - x0) as usize;
+            let idx = (y - y0) as usize * *width as usize + (x - x0) as usize;
             let pixel = &pixels[idx];
             let image_pixel = Rgba::from_channels(pixel.red, pixel.green, pixel.blue, pixel.alpha);
 
             let src = *image.get_pixel(x as u32, y as u32);
-            let new = blend_fn(src, image_pixel, opacity);
+            let new = blend_fn(src, image_pixel, *opacity);
             image.put_pixel(x as u32, y as u32, new);
-        }
-    }
-}
-
-fn copy_cel_to_image(
-    image: &mut RgbaImage,
-    cel: &RawCel,
-    size: &ImageSize,
-    pixels: &Vec<crate::pixel::Rgba>,
-    blend_fn: &BlendFn,
-) {
-    match &cel.data {
-        CelData::Raw(image_content) => {
-            copy_raw_cel_to_image(image, cel, &image_content, pixels, blend_fn);
-        }
-        CelData::Linked(_) => todo!(),
-        CelData::Tilemap(tilemap_data) => {
-            copy_tilemap_cel_to_image(image, cel, &tilemap_data, size, pixels, blend_fn);
         }
     }
 }

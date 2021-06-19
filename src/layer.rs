@@ -1,4 +1,6 @@
-use crate::{cel::Cel, reader::AseReader, AsepriteFile, AsepriteParseError, Result};
+use crate::{
+    cel::Cel, reader::AseReader, tileset::TilesetId, AsepriteFile, AsepriteParseError, Result,
+};
 use bitflags::bitflags;
 use std::{
     io::{Read, Seek},
@@ -15,7 +17,7 @@ pub enum LayerType {
     Group,
     /// A tilemap layer. Contains the tileset index.
     /// In Aseprite these are represented by a grid icon.
-    Tilemap(u32),
+    Tilemap(TilesetId),
 }
 
 bitflags! {
@@ -220,7 +222,7 @@ fn parse_layer_type<R: Read + Seek>(id: u16, reader: &mut AseReader<R>) -> Resul
     match id {
         0 => Ok(LayerType::Image),
         1 => Ok(LayerType::Group),
-        2 => reader.dword().map(|idx| LayerType::Tilemap(idx)),
+        2 => reader.dword().map(TilesetId::new).map(LayerType::Tilemap),
         _ => Err(AsepriteParseError::InvalidInput(format!(
             "Invalid layer type: {}",
             id

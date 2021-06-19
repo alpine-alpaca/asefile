@@ -1,76 +1,55 @@
-use crate::{reader::AseReader, AsepriteParseError, Result};
+use crate::{reader::AseReader, tilemap::TileBitmaskHeader, Result};
 use std::io::{Read, Seek};
 
-pub enum TileLength {
-    Byte,
-    Word,
-    DWord,
+#[derive(Debug)]
+pub(crate) struct TileId(u32);
+
+#[derive(Debug)]
+pub(crate) struct Tile {
+    pub id: TileId,
+    pub flip_x: bool,
+    pub flip_y: bool,
+    pub rotate_90cw: bool,
 }
-impl TileLength {
-    pub(crate) fn from_bits_per_tile(bits_per_tile: usize) -> Result<Self> {
-        match bits_per_tile {
-            8 => Ok(Self::Byte),
-            16 => Ok(Self::Word),
-            32 => Ok(Self::DWord),
-            _ => Err(AsepriteParseError::InvalidInput(format!(
-                "Invalid number of bits per tile. Expected 8, 16, or 32, got: {}",
-                bits_per_tile
-            ))),
+impl Tile {
+    pub(crate) fn new(chunk: &[u8], header: &TileBitmaskHeader) -> Result<Self> {
+        AseReader::new(chunk)
+            .dword()
+            .map(|bits| Self::parse(bits, header))
+    }
+    fn parse(bits: u32, header: &TileBitmaskHeader) -> Self {
+        Self {
+            id: TileId(bits & header.tile_id),
+            flip_x: as_bool(bits & header.x_flip),
+            flip_y: as_bool(bits & header.y_flip),
+            rotate_90cw: as_bool(bits & header.rotate_90cw),
         }
     }
-    fn to_bytes_per_tile(&self) -> usize {
-        match self {
-            TileLength::Byte => 1,
-            TileLength::Word => 2,
-            TileLength::DWord => 4,
-        }
-    }
 }
+
 #[derive(Debug)]
-pub struct Tile8(u8);
-#[derive(Debug)]
-pub struct Tile16(u16);
-impl Tile16 {
-    fn new(chunk: &[u8]) -> Result<Self> {
-        AseReader::new(chunk).word().map(Self)
-    }
-}
-#[derive(Debug)]
-pub struct Tile32(u32);
-impl Tile32 {
-    fn new(chunk: &[u8]) -> Result<Self> {
-        AseReader::new(chunk).dword().map(Self)
-    }
-}
-#[derive(Debug)]
-pub enum Tiles {
-    Byte(Vec<Tile8>),
-    Word(Vec<Tile16>),
-    DWord(Vec<Tile32>),
-}
+pub struct Tiles(Vec<Tile>);
 impl Tiles {
     pub(crate) fn unzip<T: Read + Seek>(
         reader: AseReader<T>,
-        tile_size: TileLength,
         expected_tile_count: usize,
+        header: &TileBitmaskHeader,
     ) -> Result<Self> {
-        let expected_output_size = tile_size.to_bytes_per_tile() * expected_tile_count;
+        // Only 32-bit tiles supported for now
+        let expected_output_size = 32 * expected_tile_count;
         let bytes = reader.unzip(expected_output_size)?;
-        match tile_size {
-            TileLength::Byte => {
-                let tiles = bytes.iter().map(|byte| Tile8(*byte)).collect();
-                Ok(Self::Byte(tiles))
-            }
-            TileLength::Word => {
-                assert!(bytes.len() % 2 == 0);
-                let tiles: Result<Vec<_>> = bytes.chunks_exact(2).map(Tile16::new).collect();
-                tiles.map(Self::Word)
-            }
-            TileLength::DWord => {
-                assert!(bytes.len() % 4 == 0);
-                let tiles: Result<Vec<_>> = bytes.chunks_exact(4).map(Tile32::new).collect();
-                tiles.map(Self::DWord)
-            }
-        }
+        let tiles: Result<Vec<Tile>> = bytes
+            .chunks_exact(4)
+            .map(|bytes| Tile::new(bytes, header))
+            .collect();
+        tiles.map(Self)
     }
+    pub(crate) fn tiles(&self) -> &Vec<Tile> {
+        &self.0
+    }
+}
+
+fn as_bool(bit: u32) -> bool {
+    assert!(bit == 0 || bit == 1);
+    bit == 1
 }

@@ -329,7 +329,7 @@ fn palette() {
 #[test]
 fn tileset() {
     let f = load_test_file("tileset");
-    let ts = f.tileset().unwrap();
+    let ts = &f.tilesets()[tileset::TilesetId::new(0)];
     assert_eq!(ts.name(), "test_tileset");
 }
 
