@@ -44,7 +44,7 @@ impl Tiles {
             .collect();
         tiles.map(Self)
     }
-    pub(crate) fn tiles(&self) -> &Vec<Tile> {
+    pub(crate) fn value(&self) -> &Vec<Tile> {
         &self.0
     }
 }

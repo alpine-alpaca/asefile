@@ -367,12 +367,41 @@ fn blend_mode_to_blend_fn(mode: BlendMode) -> BlendFn {
 
 fn write_tilemap_cel_to_image(
     image: &mut RgbaImage,
-    cel: &CelData,
+    cel_data: &CelData,
     tilemap_data: &Tilemap,
     tileset: &Tileset,
     blend_mode: &BlendMode,
 ) {
+    let CelData { x, y, opacity, .. } = cel_data;
+    // tilemap dimensions
+    let tilemap_width = tilemap_data.width;
+    let tilemap_height = tilemap_data.height;
+    let tiles = &tilemap_data.tiles;
+    // tile dimensions
+    let tile_size = tileset.tile_size();
+    let tile_width = *tile_size.width();
+    let tile_height = *tile_size.height();
+    // pixel iteration
+    let pixel_x_start = *x as i32;
+    let pixel_x_end = pixel_x_start + (tile_width as i32);
+    let pixel_y_start = *y as i32;
+    let pixel_y_end = pixel_y_start + (tile_height as i32);
+    // tile data
+    // TODO: support external file reference
+    let tiles_data = tileset
+        .tiles_data()
+        .as_ref()
+        .expect("Tilesets with external file reference not yet implemented");
+    for tile_y in 0..tilemap_height {
+        for tile_x in 0..tilemap_width {
+            // TODO: support tile transform flags
+            let tile_idx = (tile_x + (tile_y * tilemap_width)) as usize;
+            let tile = &tiles[tile_idx];
+            let tile_id = &tile.id;
+        }
+    }
     let blend_fn = blend_mode_to_blend_fn(*blend_mode);
+
     todo!()
 }
 

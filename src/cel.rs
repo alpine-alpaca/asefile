@@ -244,6 +244,7 @@ impl ImageSize {
     }
 }
 
+// CelData holds fields which are common to all cel types.
 #[derive(Debug)]
 pub(crate) struct CelData {
     pub layer_index: u16,
@@ -271,6 +272,7 @@ pub(crate) struct ImageContent {
     pub pixels: Pixels,
 }
 
+// CelContent holds data specific to each type of cel.
 #[derive(Debug)]
 pub(crate) enum CelContent {
     Raw(ImageContent),

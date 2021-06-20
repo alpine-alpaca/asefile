@@ -89,6 +89,14 @@ pub struct TileSize {
     width: u16,
     height: u16,
 }
+impl TileSize {
+    pub fn width(&self) -> &u16 {
+        &self.width
+    }
+    pub fn height(&self) -> &u16 {
+        &self.height
+    }
+}
 
 #[derive(Debug)]
 pub struct Tileset {
