@@ -9,8 +9,9 @@ use crate::{
     cel::{CelData, CelsData, ImageContent, ImageSize},
     external_file::{ExternalFile, ExternalFileId, ExternalFilesById},
     layer::{Layer, LayersData},
+    tile::TileId,
     tilemap::Tilemap,
-    tileset::{Tileset, TilesetsById},
+    tileset::{TileSize, Tileset, TilesetsById},
 };
 use crate::{cel::Cel, *};
 use cel::{CelContent, RawCel};
@@ -365,6 +366,17 @@ fn blend_mode_to_blend_fn(mode: BlendMode) -> BlendFn {
     }
 }
 
+fn tile_pixels<'a>(
+    pixels: &'a Vec<pixel::Rgba>,
+    tile_size: &TileSize,
+    tile_id: &TileId,
+) -> &'a [pixel::Rgba] {
+    let pixels_per_tile = tile_size.pixels_per_tile() as usize;
+    let start = pixels_per_tile * (tile_id.0 as usize);
+    let len = start + pixels_per_tile;
+    &pixels[start..start + len]
+}
+
 fn write_tilemap_cel_to_image(
     image: &mut RgbaImage,
     cel_data: &CelData,
@@ -373,34 +385,46 @@ fn write_tilemap_cel_to_image(
     blend_mode: &BlendMode,
 ) {
     let CelData { x, y, opacity, .. } = cel_data;
+    let cel_x = *x as i32;
+    let cel_y = *y as i32;
     // tilemap dimensions
-    let tilemap_width = tilemap_data.width;
-    let tilemap_height = tilemap_data.height;
+    let tilemap_width = tilemap_data.width as i32;
+    let tilemap_height = tilemap_data.height as i32;
     let tiles = &tilemap_data.tiles;
     // tile dimensions
     let tile_size = tileset.tile_size();
-    let tile_width = *tile_size.width();
-    let tile_height = *tile_size.height();
-    // pixel iteration
-    let pixel_x_start = *x as i32;
-    let pixel_x_end = pixel_x_start + (tile_width as i32);
-    let pixel_y_start = *y as i32;
-    let pixel_y_end = pixel_y_start + (tile_height as i32);
-    // tile data
-    // TODO: support external file reference
-    let tiles_data = tileset
-        .tiles_data()
+    let tile_width = *tile_size.width() as i32;
+    let tile_height = *tile_size.height() as i32;
+    // pixels
+    let pixels = tileset
+        .pixels()
         .as_ref()
-        .expect("Tilesets with external file reference not yet implemented");
+        .expect("Tileset missing tile pixel data")
+        .expect_rgba();
+    let blend_fn = blend_mode_to_blend_fn(*blend_mode);
+
     for tile_y in 0..tilemap_height {
         for tile_x in 0..tilemap_width {
             // TODO: support tile transform flags
-            let tile_idx = (tile_x + (tile_y * tilemap_width)) as usize;
-            let tile = &tiles[tile_idx];
+            let tilemap_tile_idx = (tile_x + (tile_y * tilemap_width)) as usize;
+            let tile = &tiles[tilemap_tile_idx];
             let tile_id = &tile.id;
+            let tile_pixels = tile_pixels(pixels, tile_size, tile_id);
+            for pixel_y in 0..tile_height {
+                for pixel_x in 0..tile_width {
+                    let pixel_idx = ((pixel_y * tile_width) + pixel_x) as usize;
+                    let pixel = tile_pixels[pixel_idx];
+                    let image_x = ((tile_x * tile_width) + pixel_x + cel_x) as u32;
+                    let image_y = ((tile_y * tile_height) + pixel_y + cel_y) as u32;
+                    let image_pixel =
+                        Rgba::from_channels(pixel.red, pixel.green, pixel.blue, pixel.alpha);
+                    let src = *image.get_pixel(image_x, image_y);
+                    let new = blend_fn(src, image_pixel, *opacity);
+                    image.put_pixel(image_x, image_y, new);
+                }
+            }
         }
     }
-    let blend_fn = blend_mode_to_blend_fn(*blend_mode);
 
     todo!()
 }

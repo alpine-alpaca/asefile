@@ -228,7 +228,7 @@ fn parse_frame<R: Read + Seek>(
                 // ignore old palette chunks
             }
             ChunkType::Tileset => {
-                let tileset = Tileset::parse_chunk(&chunk_data)?;
+                let tileset = Tileset::parse_chunk(&chunk_data, pixel_format)?;
                 parse_info.tileset.add(tileset);
             }
             ChunkType::CelExtra | ChunkType::Mask | ChunkType::Path => {

@@ -4,7 +4,7 @@ use std::{
     ops::Index,
 };
 
-use crate::Result;
+use crate::{pixel::Pixels, PixelFormat, Result};
 use bitflags::bitflags;
 
 use crate::{external_file::ExternalFileId, reader::AseReader};
@@ -45,42 +45,13 @@ impl ExternalTilesetReference {
     pub fn tileset_id(&self) -> &TilesetId {
         &self.tileset_id
     }
-    fn parse<T: Read + Seek>(
-        reader: &mut AseReader<T>,
-        flags: TilesetFlags,
-    ) -> Result<Option<Self>> {
-        if !flags.contains(TilesetFlags::LINKS_EXTERNAL_FILE) {
-            return Ok(None);
-        }
+    fn parse<T: Read + Seek>(reader: &mut AseReader<T>) -> Result<Self> {
         let external_file_id = reader.dword().map(ExternalFileId::new)?;
         let tileset_id = reader.dword().map(TilesetId)?;
-        Ok(Some(ExternalTilesetReference {
+        Ok(ExternalTilesetReference {
             external_file_id,
             tileset_id,
-        }))
-    }
-}
-#[derive(Debug)]
-pub struct TilesData(Vec<u8>);
-impl TilesData {
-    pub fn data(&self) -> &Vec<u8> {
-        &self.0
-    }
-    fn parse<T: Read + Seek>(
-        reader: AseReader<T>,
-        flags: TilesetFlags,
-        tile_size: &TileSize,
-        tile_count: &u32,
-    ) -> Result<Option<Self>> {
-        if !flags.contains(TilesetFlags::FILE_INCLUDES_TILES) {
-            return Ok(None);
-        }
-
-        let data_length =
-            tile_size.width as usize * (tile_size.height as usize * *tile_count as usize);
-        // Currently does not work; needs PIXEL[] refactor from cel module
-        // TODO: Fix this
-        reader.unzip(data_length).map(TilesData).map(Some)
+        })
     }
 }
 
@@ -96,6 +67,9 @@ impl TileSize {
     pub fn height(&self) -> &u16 {
         &self.height
     }
+    pub fn pixels_per_tile(&self) -> u16 {
+        self.width * self.height
+    }
 }
 
 #[derive(Debug)]
@@ -107,7 +81,7 @@ pub struct Tileset {
     base_index: i16,
     name: String,
     external_file: Option<ExternalTilesetReference>,
-    tiles_data: Option<TilesData>,
+    pixels: Option<Pixels>,
 }
 impl Tileset {
     /// Tileset id.
@@ -139,26 +113,45 @@ impl Tileset {
     pub fn external_file(&self) -> &Option<ExternalTilesetReference> {
         &self.external_file
     }
-    /// When Some, a tileset image.
-    pub fn tiles_data(&self) -> &Option<TilesData> {
-        &self.tiles_data
+    /// (Internal) When Some, contains the pixels of the image.
+    /// TODO: Tileset image export
+    pub(crate) fn pixels(&self) -> &Option<Pixels> {
+        &self.pixels
     }
 
-    pub(crate) fn parse_chunk(data: &[u8]) -> Result<Tileset> {
+    pub(crate) fn parse_chunk(data: &[u8], pixel_format: PixelFormat) -> Result<Tileset> {
         let mut reader = AseReader::new(data);
         let id = reader.dword().map(|val| TilesetId(val))?;
         let flags = reader.dword().map(|val| TilesetFlags { bits: val })?;
         let empty_tile_is_id_zero = flags.contains(TilesetFlags::EMPTY_TILE_IS_ID_ZERO);
         let tile_count = reader.dword()?;
-        let width = reader.word()?;
-        let height = reader.word()?;
-        let tile_size = TileSize { width, height };
+        let tile_width = reader.word()?;
+        let tile_height = reader.word()?;
+        let tile_size = TileSize {
+            width: tile_width,
+            height: tile_height,
+        };
         let base_index = reader.short()?;
         // Reserved bytes
         reader.skip_bytes(14)?;
         let name = reader.string()?;
-        let external_file = ExternalTilesetReference::parse(&mut reader, flags)?;
-        let tiles_data = TilesData::parse(reader, flags, &tile_size, &tile_count)?;
+        let external_file = {
+            if !flags.contains(TilesetFlags::LINKS_EXTERNAL_FILE) {
+                None
+            } else {
+                Some(ExternalTilesetReference::parse(&mut reader)?)
+            }
+        };
+        let pixels = {
+            if !flags.contains(TilesetFlags::FILE_INCLUDES_TILES) {
+                None
+            } else {
+                let _compressed_length = reader.dword()?;
+                let expected_pixel_count =
+                    (tile_count * (tile_height as u32) * (tile_width as u32)) as usize;
+                Pixels::from_compressed(reader, pixel_format, expected_pixel_count).map(Some)?
+            }
+        };
         Ok(Tileset {
             id,
             empty_tile_is_id_zero,
@@ -167,7 +160,7 @@ impl Tileset {
             base_index,
             name,
             external_file,
-            tiles_data,
+            pixels,
         })
     }
 }

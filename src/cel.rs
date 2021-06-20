@@ -199,7 +199,7 @@ impl CelsData {
                             let layer_index = cel.data.layer_index as u32;
                             let layer = &layer_info[layer_index];
                             let layer_is_background = layer.is_background();
-                            let rgba_pixels = pixel::resolve_indexed(
+                            let rgba_pixels = pixel::resolve_indexed_pixels(
                                 pixels,
                                 palette,
                                 transparent_color_index,

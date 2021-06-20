@@ -6,7 +6,7 @@ use std::io::{Read, Seek};
 // Grayscale: BYTE[2], each pixel have 2 bytes in the order Value, Alpha.
 // Indexed: BYTE, Each pixel uses 1 byte (the index).
 // RGBA: BYTE[4], each pixel have 4 bytes in this order Red, Green, Blue, Alpha.
-
+#[derive(Debug, Clone, Copy)]
 pub(crate) struct Rgba {
     pub red: u8,
     pub green: u8,
@@ -28,6 +28,7 @@ impl Rgba {
         })
     }
 }
+#[derive(Debug, Clone, Copy)]
 pub(crate) struct Grayscale {
     value: u8,
     alpha: u8,
@@ -40,6 +41,7 @@ impl Grayscale {
         Ok(Self { value, alpha })
     }
 }
+#[derive(Debug, Clone, Copy)]
 pub(crate) struct Indexed(u8);
 impl Indexed {
     pub(crate) fn value(&self) -> u8 {
@@ -71,6 +73,7 @@ impl Indexed {
 fn output_size(pixel_format: PixelFormat, expected_pixel_count: usize) -> usize {
     pixel_format.bytes_per_pixel() * expected_pixel_count
 }
+#[derive(Debug)]
 pub(crate) enum Pixels {
     Rgba(Vec<Rgba>),
     Grayscale(Vec<Grayscale>),
@@ -122,24 +125,37 @@ impl Pixels {
             Pixels::Indexed(v) => v.len(),
         }
     }
+    pub(crate) fn expect_rgba(&self) -> &Vec<Rgba> {
+        match self {
+            Pixels::Rgba(v) => v,
+            _ => panic!("Expected rgba pixel collection"),
+        }
+    }
 }
 
 pub(crate) fn resolve_indexed(
+    pixel: &Indexed,
+    palette: &ColorPalette,
+    transparent_color_index: u8,
+    layer_is_background: bool,
+) -> Result<Rgba> {
+    pixel
+        .to_rgba(palette, transparent_color_index, layer_is_background)
+        .ok_or(AsepriteParseError::InvalidInput(format!(
+            "Index out of range: {} (max: {})",
+            pixel.value(),
+            palette.num_colors()
+        )))
+}
+
+pub(crate) fn resolve_indexed_pixels(
     pixels: &Vec<Indexed>,
     palette: &ColorPalette,
     transparent_color_index: u8,
     layer_is_background: bool,
 ) -> Result<Vec<Rgba>> {
-    let max_col = palette.num_colors();
     pixels
         .iter()
-        .map(|px| {
-            px.to_rgba(palette, transparent_color_index, layer_is_background)
-                .ok_or(AsepriteParseError::InvalidInput(format!(
-                    "Index out of range: {} (max: {})",
-                    px.value(),
-                    max_col
-                )))
-        })
+        .map(|px| resolve_indexed(px, palette, transparent_color_index, layer_is_background))
         .collect()
 }

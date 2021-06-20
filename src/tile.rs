@@ -1,8 +1,11 @@
 use crate::{reader::AseReader, tilemap::TileBitmaskHeader, Result};
-use std::io::{Read, Seek};
+use std::{
+    io::{Read, Seek},
+    ops::Index,
+};
 
 #[derive(Debug)]
-pub(crate) struct TileId(u32);
+pub(crate) struct TileId(pub(crate) u32);
 
 #[derive(Debug)]
 pub(crate) struct Tile {
@@ -28,7 +31,7 @@ impl Tile {
 }
 
 #[derive(Debug)]
-pub struct Tiles(Vec<Tile>);
+pub(crate) struct Tiles(Vec<Tile>);
 impl Tiles {
     pub(crate) fn unzip<T: Read + Seek>(
         reader: AseReader<T>,
@@ -36,7 +39,7 @@ impl Tiles {
         header: &TileBitmaskHeader,
     ) -> Result<Self> {
         // Only 32-bit tiles supported for now
-        let expected_output_size = 32 * expected_tile_count;
+        let expected_output_size = 4 * expected_tile_count;
         let bytes = reader.unzip(expected_output_size)?;
         let tiles: Result<Vec<Tile>> = bytes
             .chunks_exact(4)
@@ -44,8 +47,12 @@ impl Tiles {
             .collect();
         tiles.map(Self)
     }
-    pub(crate) fn value(&self) -> &Vec<Tile> {
-        &self.0
+}
+impl Index<usize> for Tiles {
+    type Output = Tile;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.0[index]
     }
 }
 
