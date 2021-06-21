@@ -373,8 +373,8 @@ fn tile_pixels<'a>(
 ) -> &'a [pixel::Rgba] {
     let pixels_per_tile = tile_size.pixels_per_tile() as usize;
     let start = pixels_per_tile * (tile_id.0 as usize);
-    let len = start + pixels_per_tile;
-    &pixels[start..start + len]
+    let end = start + pixels_per_tile;
+    &pixels[start..end]
 }
 
 fn write_tilemap_cel_to_image(
@@ -425,8 +425,6 @@ fn write_tilemap_cel_to_image(
             }
         }
     }
-
-    todo!()
 }
 
 fn write_raw_cel_to_image(

@@ -329,8 +329,12 @@ fn palette() {
 #[test]
 fn tileset() {
     let f = load_test_file("tileset");
+    let img = f.frame(0).image();
+    assert_eq!(f.size(), (32, 32));
     let ts = &f.tilesets()[tileset::TilesetId::new(0)];
     assert_eq!(ts.name(), "test_tileset");
+
+    compare_with_reference_image(img, "tileset");
 }
 
 /*
