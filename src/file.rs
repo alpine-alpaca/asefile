@@ -64,6 +64,14 @@ impl PixelFormat {
             PixelFormat::Indexed { .. } => 1,
         }
     }
+    pub(crate) fn expect_indexed(&self) -> &u8 {
+        match self {
+            PixelFormat::Indexed {
+                transparent_color_index,
+            } => transparent_color_index,
+            _ => panic!("Expected an Indexed PixelFormat"),
+        }
+    }
 }
 
 impl AsepriteFile {
@@ -257,12 +265,47 @@ impl AsepriteFile {
                 }
             }
             CelContent::Tilemap(tilemap_data) => {
-                if let layer::LayerType::Tilemap(tileset_id) = layer.layer_type() {
-                    let tileset = &self.tilesets()[tileset_id];
-                    write_tilemap_cel_to_image(image, data, tilemap_data, tileset, &blend_mode)
-                } else {
-                    panic!("Tried to parse Tilemap Cel, but layer has no associated tileset");
-                }
+                let layer_type = layer.layer_type();
+                let tileset_id = layer_type.expect_tilemap();
+                let tileset = &self.tilesets()[*tileset_id];
+                let tileset_pixels = tileset
+                    .pixels
+                    .as_ref()
+                    .expect("Expected Tileset data to contain pixels");
+                match tileset_pixels {
+                    pixel::Pixels::Rgba(pixels) => write_tilemap_cel_to_image(
+                        image,
+                        data,
+                        tilemap_data,
+                        tileset,
+                        pixels,
+                        &blend_mode,
+                    ),
+                    pixel::Pixels::Grayscale(_) => todo!(),
+                    pixel::Pixels::Indexed(indexed_pixels) => {
+                        let palette = self
+                            .palette
+                            .as_ref()
+                            .expect("Expected a palette present when resolving indexed image");
+                        let transparent_color_index = self.pixel_format.expect_indexed();
+                        let layer_is_background = self.layers[layer.id()].is_background();
+                        let pixels = crate::pixel::resolve_indexed_pixels(
+                            indexed_pixels,
+                            &palette,
+                            *transparent_color_index,
+                            layer_is_background,
+                        )
+                        .expect("Failed to resolve indexed pixels");
+                        write_tilemap_cel_to_image(
+                            image,
+                            data,
+                            tilemap_data,
+                            tileset,
+                            &pixels,
+                            &blend_mode,
+                        );
+                    }
+                };
             }
             CelContent::Linked(frame) => {
                 if let Some(cel) = self.framedata.cel(*frame, data.layer_index) {
@@ -382,6 +425,7 @@ fn write_tilemap_cel_to_image(
     cel_data: &CelData,
     tilemap_data: &Tilemap,
     tileset: &Tileset,
+    pixels: &Vec<crate::pixel::Rgba>,
     blend_mode: &BlendMode,
 ) {
     let CelData { x, y, opacity, .. } = cel_data;
@@ -396,11 +440,11 @@ fn write_tilemap_cel_to_image(
     let tile_width = *tile_size.width() as i32;
     let tile_height = *tile_size.height() as i32;
     // pixels
-    let pixels = tileset
-        .pixels()
-        .as_ref()
-        .expect("Tileset missing tile pixel data")
-        .expect_rgba();
+    // let pixels = tileset
+    //     .pixels()
+    //     .as_ref()
+    //     .expect("Tileset missing tile pixel data")
+    //     .expect_rgba();
     let blend_fn = blend_mode_to_blend_fn(*blend_mode);
 
     for tile_y in 0..tilemap_height {

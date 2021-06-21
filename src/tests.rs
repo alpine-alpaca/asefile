@@ -337,6 +337,17 @@ fn tileset() {
     compare_with_reference_image(img, "tileset");
 }
 
+#[test]
+fn tileset_indexed() {
+    let f = load_test_file("tileset_indexed");
+    let img = f.frame(0).image();
+    assert_eq!(f.size(), (32, 32));
+    let ts = &f.tilesets()[tileset::TilesetId::new(0)];
+    assert_eq!(ts.name(), "test_tileset");
+
+    compare_with_reference_image(img, "tileset_indexed");
+}
+
 /*
 #[test]
 fn gen_random_pixels() {

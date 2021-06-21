@@ -19,6 +19,14 @@ pub enum LayerType {
     /// In Aseprite these are represented by a grid icon.
     Tilemap(TilesetId),
 }
+impl LayerType {
+    pub(crate) fn expect_tilemap(&self) -> &TilesetId {
+        match self {
+            Self::Tilemap(id) => id,
+            _ => panic!("Expected a Tilemap layer"),
+        }
+    }
+}
 
 bitflags! {
     /// Various layer attributes.

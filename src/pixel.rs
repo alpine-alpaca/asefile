@@ -125,12 +125,6 @@ impl Pixels {
             Pixels::Indexed(v) => v.len(),
         }
     }
-    pub(crate) fn expect_rgba(&self) -> &Vec<Rgba> {
-        match self {
-            Pixels::Rgba(v) => v,
-            _ => panic!("Expected rgba pixel collection"),
-        }
-    }
 }
 
 pub(crate) fn resolve_indexed(

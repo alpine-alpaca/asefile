@@ -6,6 +6,7 @@ use std::{
 
 use crate::{pixel::Pixels, PixelFormat, Result};
 use bitflags::bitflags;
+use image::RgbaImage;
 
 use crate::{external_file::ExternalFileId, reader::AseReader};
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
@@ -74,14 +75,14 @@ impl TileSize {
 
 #[derive(Debug)]
 pub struct Tileset {
-    id: TilesetId,
-    empty_tile_is_id_zero: bool,
-    tile_count: u32,
-    tile_size: TileSize,
-    base_index: i16,
-    name: String,
-    external_file: Option<ExternalTilesetReference>,
-    pixels: Option<Pixels>,
+    pub(crate) id: TilesetId,
+    pub(crate) empty_tile_is_id_zero: bool,
+    pub(crate) tile_count: u32,
+    pub(crate) tile_size: TileSize,
+    pub(crate) base_index: i16,
+    pub(crate) name: String,
+    pub(crate) external_file: Option<ExternalTilesetReference>,
+    pub(crate) pixels: Option<Pixels>,
 }
 impl Tileset {
     /// Tileset id.
@@ -113,10 +114,9 @@ impl Tileset {
     pub fn external_file(&self) -> &Option<ExternalTilesetReference> {
         &self.external_file
     }
-    /// (Internal) When Some, contains the pixels of the image.
     /// TODO: Tileset image export
-    pub(crate) fn pixels(&self) -> &Option<Pixels> {
-        &self.pixels
+    pub fn image(&self) -> RgbaImage {
+        todo!()
     }
 
     pub(crate) fn parse_chunk(data: &[u8], pixel_format: PixelFormat) -> Result<Tileset> {
