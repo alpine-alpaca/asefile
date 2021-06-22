@@ -59,7 +59,7 @@ fn basic() {
     assert_eq!(f.pixel_format, PixelFormat::Rgba);
     assert!(f.layer(0).flags().contains(LayerFlags::VISIBLE));
 
-    compare_with_reference_image(f.frame(0).image(), "basic-16x16");
+    compare_with_reference_image(f.frame(0).image().unwrap(), "basic-16x16");
 }
 
 #[test]
@@ -72,10 +72,10 @@ fn layers_and_tags() {
     assert_eq!(f.pixel_format, PixelFormat::Rgba);
     assert_eq!(f.tags.len(), 3);
 
-    compare_with_reference_image(f.frame(0).image(), "layers_and_tags_01");
-    compare_with_reference_image(f.frame(1).image(), "layers_and_tags_02");
-    compare_with_reference_image(f.frame(2).image(), "layers_and_tags_03");
-    compare_with_reference_image(f.frame(3).image(), "layers_and_tags_04");
+    compare_with_reference_image(f.frame(0).image().unwrap(), "layers_and_tags_01");
+    compare_with_reference_image(f.frame(1).image().unwrap(), "layers_and_tags_02");
+    compare_with_reference_image(f.frame(2).image().unwrap(), "layers_and_tags_03");
+    compare_with_reference_image(f.frame(3).image().unwrap(), "layers_and_tags_04");
 }
 
 #[test]
@@ -87,7 +87,7 @@ fn big() {
     assert_eq!(f.num_layers(), 1);
     assert_eq!(f.pixel_format, PixelFormat::Rgba);
 
-    compare_with_reference_image(f.frame(0).image(), "big");
+    compare_with_reference_image(f.frame(0).image().unwrap(), "big");
 }
 
 #[test]
@@ -99,8 +99,8 @@ fn transparency() {
     assert_eq!(f.num_layers(), 2);
     assert_eq!(f.pixel_format(), PixelFormat::Rgba);
 
-    compare_with_reference_image(f.frame(0).image(), "transparency_01");
-    compare_with_reference_image(f.frame(1).image(), "transparency_02");
+    compare_with_reference_image(f.frame(0).image().unwrap(), "transparency_01");
+    compare_with_reference_image(f.frame(1).image().unwrap(), "transparency_02");
 }
 
 #[test]
@@ -126,7 +126,7 @@ fn background() {
     assert_eq!(f.pixel_format, PixelFormat::Rgba);
     println!("{:#?}", f.layers);
 
-    compare_with_reference_image(f.frame(0).image(), "background");
+    compare_with_reference_image(f.frame(0).image().unwrap(), "background");
 }
 
 #[test]
@@ -138,7 +138,7 @@ fn blend_normal() {
     assert_eq!(f.num_layers(), 2);
     assert_eq!(f.pixel_format, PixelFormat::Rgba);
 
-    compare_with_reference_image(f.frame(0).image(), "blend_normal");
+    compare_with_reference_image(f.frame(0).image().unwrap(), "blend_normal");
 }
 
 #[test]
@@ -150,7 +150,7 @@ fn blend_multiply() {
     assert_eq!(f.num_layers(), 2);
     assert_eq!(f.pixel_format, PixelFormat::Rgba);
 
-    compare_with_reference_image(f.frame(0).image(), "blend_multiply");
+    compare_with_reference_image(f.frame(0).image().unwrap(), "blend_multiply");
 }
 
 #[test]
@@ -162,7 +162,7 @@ fn blend_screen() {
     assert_eq!(f.num_layers(), 2);
     assert_eq!(f.pixel_format, PixelFormat::Rgba);
 
-    compare_with_reference_image(f.frame(0).image(), "blend_screen");
+    compare_with_reference_image(f.frame(0).image().unwrap(), "blend_screen");
 }
 
 #[test]
@@ -174,7 +174,7 @@ fn blend_darken() {
     assert_eq!(f.num_layers(), 2);
     assert_eq!(f.pixel_format, PixelFormat::Rgba);
 
-    compare_with_reference_image(f.frame(0).image(), "blend_darken");
+    compare_with_reference_image(f.frame(0).image().unwrap(), "blend_darken");
 }
 
 #[test]
@@ -186,7 +186,7 @@ fn blend_lighten() {
     assert_eq!(f.num_layers(), 2);
     assert_eq!(f.pixel_format, PixelFormat::Rgba);
 
-    compare_with_reference_image(f.frame(0).image(), "blend_lighten");
+    compare_with_reference_image(f.frame(0).image().unwrap(), "blend_lighten");
 }
 
 #[test]
@@ -198,7 +198,7 @@ fn blend_overlay() {
     assert_eq!(f.num_layers(), 2);
     assert_eq!(f.pixel_format, PixelFormat::Rgba);
 
-    compare_with_reference_image(f.frame(0).image(), "blend_overlay");
+    compare_with_reference_image(f.frame(0).image().unwrap(), "blend_overlay");
 }
 
 #[test]
@@ -210,7 +210,7 @@ fn blend_color_dodge() {
     assert_eq!(f.num_layers(), 2);
     assert_eq!(f.pixel_format, PixelFormat::Rgba);
 
-    compare_with_reference_image(f.frame(0).image(), "blend_colordodge");
+    compare_with_reference_image(f.frame(0).image().unwrap(), "blend_colordodge");
 }
 
 #[test]
@@ -230,7 +230,7 @@ fn blend_soft_light() {
 
 fn blend_test(name: &str) {
     let f = load_test_file(name);
-    compare_with_reference_image(f.frame(0).image(), name);
+    compare_with_reference_image(f.frame(0).image().unwrap(), name);
 }
 
 #[test]
@@ -291,7 +291,7 @@ fn single_layer() {
     assert_eq!(f.num_layers(), 6);
     assert_eq!(f.layer_by_name("Layer 1").map(|l| l.id()), Some(1));
 
-    compare_with_reference_image(f.layer_image(2, 1), "single_layer");
+    compare_with_reference_image(f.layer_image(2, 1).unwrap(), "single_layer");
 }
 
 #[test]
@@ -302,9 +302,9 @@ fn linked_cels() {
     assert_eq!(f.num_layers(), 3);
     //assert_eq!(f.named_layer("Layer 1").map(|l| l.id()), Some(1));
 
-    compare_with_reference_image(f.frame(0).image(), "linked_cels_01");
-    compare_with_reference_image(f.frame(1).image(), "linked_cels_02");
-    compare_with_reference_image(f.frame(2).image(), "linked_cels_03");
+    compare_with_reference_image(f.frame(0).image().unwrap(), "linked_cels_01");
+    compare_with_reference_image(f.frame(1).image().unwrap(), "linked_cels_02");
+    compare_with_reference_image(f.frame(2).image().unwrap(), "linked_cels_03");
 }
 
 #[test]
@@ -313,7 +313,7 @@ fn indexed() {
 
     assert_eq!(f.size(), (64, 64));
 
-    compare_with_reference_image(f.frame(0).image(), "indexed_01");
+    compare_with_reference_image(f.frame(0).image().unwrap(), "indexed_01");
 }
 
 #[test]
@@ -329,7 +329,7 @@ fn palette() {
 #[test]
 fn tileset() {
     let f = load_test_file("tileset");
-    let img = f.frame(0).image();
+    let img = f.frame(0).image().unwrap();
     assert_eq!(f.size(), (32, 32));
     let ts = f
         .tilesets()
@@ -343,7 +343,7 @@ fn tileset() {
 #[test]
 fn tileset_indexed() {
     let f = load_test_file("tileset_indexed");
-    let img = f.frame(0).image();
+    let img = f.frame(0).image().unwrap();
     assert_eq!(f.size(), (32, 32));
     let ts = &f
         .tilesets()

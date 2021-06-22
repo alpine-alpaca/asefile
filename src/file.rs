@@ -218,7 +218,7 @@ impl AsepriteFile {
     ///
     /// Can fail if the `frame` does not exist, an unsupported feature is
     /// used, or the file is malformed.
-    fn frame_image(&self, frame: u16) -> RgbaImage {
+    fn frame_image(&self, frame: u16) -> Result<RgbaImage> {
         let mut image = RgbaImage::new(self.width as u32, self.height as u32);
 
         for (layer_id, cel) in self.framedata.frame_cels(frame) {
@@ -226,13 +226,92 @@ impl AsepriteFile {
             if !self.layer(layer_id).is_visible() {
                 continue;
             }
-            self.write_cel(&mut image, cel);
+            self.write_cel(&mut image, cel)?;
         }
 
-        image
+        Ok(image)
     }
 
-    fn write_cel(&self, image: &mut RgbaImage, cel: &RawCel) {
+    fn resolve_indexed_pixels(
+        &self,
+        layer_data: &layer::LayerData,
+        indexed_pixels: &Vec<pixel::Indexed>,
+    ) -> Vec<pixel::Rgba> {
+        let palette = self
+            .palette
+            .as_ref()
+            .expect("Expected a palette present when resolving indexed image");
+        let transparent_color_index = if let PixelFormat::Indexed {
+            transparent_color_index,
+        } = self.pixel_format
+        {
+            transparent_color_index
+        } else {
+            panic!("Indexed tilemap pixels in non-indexed pixel format. Should have been caught by validate()")
+        };
+        let pixels = crate::pixel::resolve_indexed_pixels(
+            indexed_pixels,
+            &palette,
+            transparent_color_index,
+            layer_data.is_background(),
+        )
+        .expect("Failed to resolve indexed pixels");
+        pixels
+    }
+
+    fn write_tilemap_cel(
+        &self,
+        image: &mut RgbaImage,
+        data: &CelData,
+        tilemap_data: &Tilemap,
+    ) -> Result<()> {
+        let layer = self.layer(data.layer_index as u32);
+        let blend_mode = layer.blend_mode();
+        let layer_type = layer.layer_type();
+
+        let tileset_id = if let LayerType::Tilemap(tileset_id) = layer_type {
+            tileset_id
+        } else {
+            return Err(AsepriteParseError::InvalidInput(
+                "Found tilemap cel not in tilemap layer".into(),
+            ));
+        };
+        let tileset = self
+            .tilesets()
+            .get(&tileset_id)
+            .ok_or(AsepriteParseError::InvalidInput(format!(
+                "Tilemap layer references a missing tileset (tileset id {})",
+                tileset_id.0
+            )))?;
+        let tileset_pixels =
+            tileset
+                .pixels
+                .as_ref()
+                .ok_or(AsepriteParseError::UnsupportedFeature(
+                    "Expected Tileset data to contain pixels. External file tilesets not supported"
+                        .into(),
+                ))?;
+        match tileset_pixels {
+            pixel::Pixels::Rgba(pixels) => {
+                write_tilemap_cel_to_image(image, data, tilemap_data, tileset, pixels, &blend_mode)
+            }
+            pixel::Pixels::Grayscale(_) => todo!(),
+            pixel::Pixels::Indexed(indexed_pixels) => {
+                let pixels = self.resolve_indexed_pixels(&self.layers[layer.id()], indexed_pixels);
+                write_tilemap_cel_to_image(
+                    image,
+                    data,
+                    tilemap_data,
+                    tileset,
+                    &pixels,
+                    &blend_mode,
+                );
+            }
+        };
+        Ok(())
+    }
+
+    fn write_cel(&self, image: &mut RgbaImage, cel: &RawCel) -> Result<()> {
         assert!(self.pixel_format != PixelFormat::Grayscale);
         let RawCel { data, content } = cel;
         let layer = self.layer(data.layer_index as u32);
@@ -243,92 +322,43 @@ impl AsepriteFile {
                 match pixels {
                     pixel::Pixels::Rgba(pixels) => {
                         write_raw_cel_to_image(image, data, size, pixels, &blend_mode);
+                        Ok(())
                     }
-                    pixel::Pixels::Grayscale(_) => {
-                        panic!("Grayscale cel. Should have been caught by validate()");
-                    }
-                    pixel::Pixels::Indexed(_) => {
-                        panic!("Indexed data cel. Should have been caught by validate()");
-                    }
+                    pixel::Pixels::Grayscale(_) => Err(AsepriteParseError::UnsupportedFeature(
+                        "Grayscale cels not supported".into(),
+                    )),
+                    pixel::Pixels::Indexed(_) => Err(AsepriteParseError::InvalidInput(
+                        "Internal error: unresolved Indexed data".into(),
+                    )),
                 }
             }
-            CelContent::Tilemap(tilemap_data) => {
-                let layer_type = layer.layer_type();
-
-                let tileset_id = if let LayerType::Tilemap(tileset_id) = layer_type {
-                    tileset_id
-                } else {
-                    panic!("Tilemap cel not in tilemap layer. Should be caught by validation");
-                };
-                let tileset = self
-                    .tilesets()
-                    .get(&tileset_id)
-                    .expect("Tilemap layer references a missing tileset");
-                let tileset_pixels = tileset
-                    .pixels
-                    .as_ref()
-                    .expect("Expected Tileset data to contain pixels");
-                match tileset_pixels {
-                    pixel::Pixels::Rgba(pixels) => write_tilemap_cel_to_image(
-                        image,
-                        data,
-                        tilemap_data,
-                        tileset,
-                        pixels,
-                        &blend_mode,
-                    ),
-                    pixel::Pixels::Grayscale(_) => todo!(),
-                    pixel::Pixels::Indexed(indexed_pixels) => {
-                        let palette = self
-                            .palette
-                            .as_ref()
-                            .expect("Expected a palette present when resolving indexed image");
-                        let transparent_color_index = if let PixelFormat::Indexed {
-                            transparent_color_index,
-                        } = self.pixel_format
-                        {
-                            transparent_color_index
-                        } else {
-                            panic!("Indexed tilemap pixels in non-indexed pixel format. Should have been caught by validate()")
-                        };
-                        let layer_is_background = self.layers[layer.id()].is_background();
-                        let pixels = crate::pixel::resolve_indexed_pixels(
-                            indexed_pixels,
-                            &palette,
-                            transparent_color_index,
-                            layer_is_background,
-                        )
-                        .expect("Failed to resolve indexed pixels");
-                        write_tilemap_cel_to_image(
-                            image,
-                            data,
-                            tilemap_data,
-                            tileset,
-                            &pixels,
-                            &blend_mode,
-                        );
-                    }
-                };
-            }
+            CelContent::Tilemap(tilemap_data) => self.write_tilemap_cel(image, data, tilemap_data),
             CelContent::Linked(frame) => {
-                if let Some(cel) = self.framedata.cel(*frame, data.layer_index) {
-                    if let CelContent::Linked(_) = cel.content {
-                        panic!("Cel links to empty cel. Should have been caught by validate()");
-                    } else {
-                        // Recurse once with the source non-Linked cel
-                        self.write_cel(image, cel);
-                    }
+                let cel = if let Some(cel) = self.framedata.cel(*frame, data.layer_index) {
+                    Ok(cel)
+                } else {
+                    Err(AsepriteParseError::InvalidInput(
+                        "Failed to find target of linked cel".into(),
+                    ))
+                }?;
+                if let CelContent::Linked(_) = cel.content {
+                    Err(AsepriteParseError::InvalidInput(
+                        "Cel links to empty cel".into(),
+                    ))
+                } else {
+                    // Recurse once with the source non-Linked cel
+                    self.write_cel(image, cel)
                 }
             }
         }
     }
 
-    pub(crate) fn layer_image(&self, frame: u16, layer_id: usize) -> RgbaImage {
+    pub(crate) fn layer_image(&self, frame: u16, layer_id: usize) -> Result<RgbaImage> {
         let mut image = RgbaImage::new(self.width as u32, self.height as u32);
         for cel in self.framedata.cel(frame, layer_id as u16) {
-            self.write_cel(&mut image, cel);
+            self.write_cel(&mut image, cel)?;
         }
-        image
+        Ok(image)
     }
 
     // fn frame_cels(&self, frame: u16, layer: u16) -> Vec<&RawCel> {
@@ -365,7 +395,7 @@ impl<'a> Frame<'a> {
     /// layers according to their blend mode. Skips invisible layers (i.e.,
     /// layers with a deactivated eye icon).
     ///
-    pub fn image(&self) -> RgbaImage {
+    pub fn image(&self) -> Result<RgbaImage> {
         self.file.frame_image(self.index as u16)
     }
 
@@ -436,21 +466,15 @@ fn write_tilemap_cel_to_image(
     let cel_y = *y as i32;
     // tilemap dimensions
     let tilemap_width = tilemap_data.width as i32;
-    let tilemap_height = tilemap_data.height as i32;
     let tiles = &tilemap_data.tiles;
     // tile dimensions
     let tile_size = tileset.tile_size();
     let tile_width = *tile_size.width() as i32;
     let tile_height = *tile_size.height() as i32;
-    // pixels
-    // let pixels = tileset
-    //     .pixels()
-    //     .as_ref()
-    //     .expect("Tileset missing tile pixel data")
-    //     .expect_rgba();
+
     let blend_fn = blend_mode_to_blend_fn(*blend_mode);
 
-    for tile_y in 0..tilemap_height {
+    for tile_y in 0..tilemap_data.height as i32 {
         for tile_x in 0..tilemap_width {
             // TODO: support tile transform flags
             let tilemap_tile_idx = (tile_x + (tile_y * tilemap_width)) as usize;

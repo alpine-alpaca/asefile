@@ -22,7 +22,7 @@ pub struct Cel<'a> {
 impl<'a> Cel<'a> {
     /// This cel as an image. Result has the same dimensions as the [AsepriteFile].
     /// If the cel is empty, all image pixels will be transparent.
-    pub fn image(&self) -> RgbaImage {
+    pub fn image(&self) -> Result<RgbaImage> {
         self.file
             .layer_image(self.frame as u16, self.layer as usize)
     }

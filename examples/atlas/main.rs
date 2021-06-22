@@ -53,7 +53,7 @@ fn main() {
                 });
                 images.push(ImageInfo {
                     location: rect.clone(),
-                    image: ase.frame(frame).image(),
+                    image: ase.frame(frame).image().unwrap(),
                 });
             } else {
                 panic!("Could not place {} frame {}", file, frame);
