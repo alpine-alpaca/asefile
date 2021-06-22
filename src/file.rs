@@ -8,7 +8,7 @@ use crate::{
     blend::{self, Color8},
     cel::{CelData, CelsData, ImageContent, ImageSize},
     external_file::{ExternalFile, ExternalFileId, ExternalFilesById},
-    layer::{Layer, LayersData},
+    layer::{Layer, LayerType, LayersData},
     tile::TileId,
     tilemap::Tilemap,
     tileset::{TileSize, Tileset, TilesetsById},
@@ -62,14 +62,6 @@ impl PixelFormat {
             PixelFormat::Rgba => 4,
             PixelFormat::Grayscale => 2,
             PixelFormat::Indexed { .. } => 1,
-        }
-    }
-    pub(crate) fn expect_indexed(&self) -> &u8 {
-        match self {
-            PixelFormat::Indexed {
-                transparent_color_index,
-            } => transparent_color_index,
-            _ => panic!("Expected an Indexed PixelFormat"),
         }
     }
 }
@@ -179,13 +171,9 @@ impl AsepriteFile {
         &self.external_files
     }
 
-    /// Get a reference to an external file by ID.
-    ///
-    /// # Panics
-    ///
-    /// Panics if no external file is found for the given id.
-    pub fn external_file_by_id(&self, id: &ExternalFileId) -> &ExternalFile {
-        &self.external_files[*id]
+    /// Get a reference to an external file by ID, if the file exists.
+    pub fn external_file_by_id(&self, id: &ExternalFileId) -> Option<&ExternalFile> {
+        self.external_files.get(id)
     }
 
     /// Total number of tags.
@@ -266,8 +254,16 @@ impl AsepriteFile {
             }
             CelContent::Tilemap(tilemap_data) => {
                 let layer_type = layer.layer_type();
-                let tileset_id = layer_type.expect_tilemap();
-                let tileset = &self.tilesets()[*tileset_id];
+
+                let tileset_id = if let LayerType::Tilemap(tileset_id) = layer_type {
+                    tileset_id
+                } else {
+                    panic!("Tilemap cel not in tilemap layer. Should be caught by validation");
+                };
+                let tileset = self
+                    .tilesets()
+                    .get(&tileset_id)
+                    .expect("Tilemap layer references a missing tileset");
                 let tileset_pixels = tileset
                     .pixels
                     .as_ref()
@@ -287,12 +283,19 @@ impl AsepriteFile {
                             .palette
                             .as_ref()
                             .expect("Expected a palette present when resolving indexed image");
-                        let transparent_color_index = self.pixel_format.expect_indexed();
+                        let transparent_color_index = if let PixelFormat::Indexed {
+                            transparent_color_index,
+                        } = self.pixel_format
+                        {
+                            transparent_color_index
+                        } else {
+                            panic!("Indexed tilemap pixels in non-indexed pixel format. Should have been caught by validate()")
+                        };
                         let layer_is_background = self.layers[layer.id()].is_background();
                         let pixels = crate::pixel::resolve_indexed_pixels(
                             indexed_pixels,
                             &palette,
-                            *transparent_color_index,
+                            transparent_color_index,
                             layer_is_background,
                         )
                         .expect("Failed to resolve indexed pixels");

@@ -1,6 +1,6 @@
 use std::io::{Read, Seek};
 
-use crate::{reader::AseReader, tile, Result};
+use crate::{reader::AseReader, tile, AsepriteParseError, Result};
 
 #[derive(Debug)]
 pub(crate) struct Tilemap {
@@ -15,7 +15,12 @@ impl Tilemap {
         let width = reader.word()?;
         let height = reader.word()?;
         let bits_per_tile = reader.word()?;
-        assert!(bits_per_tile == 32, "Expected 32 bits per tile");
+        if bits_per_tile != 32 {
+            return Err(AsepriteParseError::UnsupportedFeature(format!(
+                "Asefile only supports 32 bits per tile, got input with {} bits per tile",
+                bits_per_tile
+            )));
+        }
         let bitmask_header = TileBitmaskHeader::parse(&mut reader)?;
         // Reserved bytes
         reader.skip_bytes(10)?;

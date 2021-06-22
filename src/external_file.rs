@@ -2,7 +2,6 @@ use crate::reader::AseReader;
 use crate::Result;
 use core::str;
 use std::collections::HashMap;
-use std::ops::Index;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct ExternalFileId(u32);
@@ -58,14 +57,8 @@ impl ExternalFilesById {
     pub fn map(&self) -> &HashMap<ExternalFileId, ExternalFile> {
         &self.0
     }
-}
-impl Index<ExternalFileId> for ExternalFilesById {
-    type Output = ExternalFile;
-    fn index(&self, id: ExternalFileId) -> &Self::Output {
+    pub fn get(&self, id: &ExternalFileId) -> Option<&ExternalFile> {
         let map = self.map();
-        if map.contains_key(&id) {
-            return &self.map()[&id];
-        }
-        panic!("no external file found for id")
+        map.get(id)
     }
 }

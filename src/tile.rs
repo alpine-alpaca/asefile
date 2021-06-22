@@ -45,7 +45,7 @@ impl Tiles {
             .chunks_exact(4)
             .map(|bytes| Tile::new(bytes, header))
             .collect();
-        tiles.map(Self)
+        Ok(Self(tiles?))
     }
 }
 impl Index<usize> for Tiles {
@@ -56,7 +56,6 @@ impl Index<usize> for Tiles {
     }
 }
 
-fn as_bool(bit: u32) -> bool {
-    assert!(bit == 0 || bit == 1);
-    bit == 1
+fn as_bool(bitwise_and: u32) -> bool {
+    bitwise_and != 0
 }

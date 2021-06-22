@@ -1,16 +1,14 @@
 use std::{
     collections::HashMap,
     io::{Read, Seek},
-    ops::Index,
 };
 
 use crate::{pixel::Pixels, PixelFormat, Result};
 use bitflags::bitflags;
-use image::RgbaImage;
 
 use crate::{external_file::ExternalFileId, reader::AseReader};
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
-pub struct TilesetId(u32);
+pub struct TilesetId(pub(crate) u32);
 impl TilesetId {
     pub(crate) fn new(value: u32) -> Self {
         Self(value)
@@ -21,14 +19,15 @@ impl TilesetId {
 }
 bitflags! {
     struct TilesetFlags: u32 {
-        /// Include link to external file.
+        // Include link to external file.
         const LINKS_EXTERNAL_FILE = 0x0001;
-        /// Include tiles inside this file.
+        // Include tiles inside this file.
         const FILE_INCLUDES_TILES = 0x0002;
-        /// Tilemaps using this tileset use tile ID=0 as empty tile
-        /// (this is the new format). In rare cases this bit is off,
-        /// the empty tile will be equal to 0xffffffff (used in
-        /// internal versions of Aseprite).
+        // From the spec:
+        // Tilemaps using this tileset use tile ID=0 as empty tile
+        // (this is the new format). In rare cases this bit is off,
+        // the empty tile will be equal to 0xffffffff (used in
+        // internal versions of Aseprite).
         const EMPTY_TILE_IS_ID_ZERO = 0x0004;
     }
 }
@@ -89,8 +88,9 @@ impl Tileset {
     pub fn id(&self) -> &TilesetId {
         &self.id
     }
+    /// From the Aseprite file spec:
     /// When true, tilemaps using this tileset use tile ID=0 as empty tile.
-    /// In rare cases this is false, the empty tile will be equal to 0xffffffff.
+    /// In rare cases this is false, the empty tile will be equal to 0xffffffff (used in internal versions of Aseprite).
     pub fn empty_tile_is_id_zero(&self) -> &bool {
         &self.empty_tile_is_id_zero
     }
@@ -111,12 +111,8 @@ impl Tileset {
         &self.name
     }
     /// When Some, includes a link to an external file.
-    pub fn external_file(&self) -> &Option<ExternalTilesetReference> {
-        &self.external_file
-    }
-    /// TODO: Tileset image export
-    pub fn image(&self) -> RgbaImage {
-        todo!()
+    pub fn external_file(&self) -> Option<&ExternalTilesetReference> {
+        self.external_file.as_ref()
     }
 
     pub(crate) fn parse_chunk(data: &[u8], pixel_format: PixelFormat) -> Result<Tileset> {
@@ -176,14 +172,7 @@ impl TilesetsById {
     pub fn map(&self) -> &HashMap<TilesetId, Tileset> {
         &self.0
     }
-}
-impl Index<TilesetId> for TilesetsById {
-    type Output = Tileset;
-    fn index(&self, id: TilesetId) -> &Self::Output {
-        let map = self.map();
-        if map.contains_key(&id) {
-            return &self.map()[&id];
-        }
-        panic!("no external file found for id")
+    pub fn get(&self, id: &TilesetId) -> Option<&Tileset> {
+        self.0.get(id)
     }
 }

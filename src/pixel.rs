@@ -87,12 +87,20 @@ impl Pixels {
                 Ok(Self::Indexed(pixels))
             }
             PixelFormat::Grayscale => {
-                assert!(bytes.len() % 2 == 0);
+                if bytes.len() % 2 != 0 {
+                    return Err(AsepriteParseError::InvalidInput(
+                        "Incorrect length of bytes for Grayscale image data".to_string(),
+                    ));
+                }
                 let pixels: Result<Vec<_>> = bytes.chunks_exact(2).map(Grayscale::new).collect();
                 pixels.map(Self::Grayscale)
             }
             PixelFormat::Rgba => {
-                assert!(bytes.len() % 4 == 0);
+                if bytes.len() % 4 != 2 {
+                    return Err(AsepriteParseError::InvalidInput(
+                        "Incorrect length of bytes for RGBA image data".to_string(),
+                    ));
+                }
                 let pixels: Result<Vec<_>> = bytes.chunks_exact(4).map(Rgba::new).collect();
                 pixels.map(Self::Rgba)
             }

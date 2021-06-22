@@ -142,7 +142,11 @@ impl CelsData {
                         Pixels::Rgba(_) => {
                             // TODO: Verify data length
                         }
-                        Pixels::Grayscale(_) => todo!(),
+                        Pixels::Grayscale(_) => {
+                            return Err(AsepriteParseError::UnsupportedFeature(
+                                "Grayscale images not supported".into(),
+                            ))
+                        }
                         Pixels::Indexed(_) => {
                             return Err(AsepriteParseError::InvalidInput(
                                 "Internal error: unresolved Indexed data".into(),
@@ -168,7 +172,8 @@ impl CelsData {
                         }
                     }
                 }
-                CelContent::Tilemap { .. } => {
+                CelContent::Tilemap(_) => {
+
                     // TODO: Verify
                 }
             }
