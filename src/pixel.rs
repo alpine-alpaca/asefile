@@ -96,7 +96,7 @@ impl Pixels {
                 pixels.map(Self::Grayscale)
             }
             PixelFormat::Rgba => {
-                if bytes.len() % 4 != 2 {
+                if bytes.len() % 4 != 0 {
                     return Err(AsepriteParseError::InvalidInput(
                         "Incorrect length of bytes for RGBA image data".to_string(),
                     ));
