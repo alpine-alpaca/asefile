@@ -40,6 +40,15 @@ impl Grayscale {
         let alpha = reader.byte()?;
         Ok(Self { value, alpha })
     }
+    pub(crate) fn as_rgba(&self) -> Rgba {
+        let Self { value, alpha } = self;
+        Rgba {
+            red: *value,
+            green: *value,
+            blue: *value,
+            alpha: *alpha,
+        }
+    }
 }
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Indexed(u8);

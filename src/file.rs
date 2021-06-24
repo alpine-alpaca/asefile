@@ -9,6 +9,7 @@ use crate::{
     cel::{CelData, CelsData, ImageContent, ImageSize},
     external_file::{ExternalFile, ExternalFileId, ExternalFilesById},
     layer::{Layer, LayerType, LayersData},
+    pixel::Grayscale,
     tile::TileId,
     tilemap::Tilemap,
     tileset::{TileSize, Tileset, TilesetsById},
@@ -279,7 +280,18 @@ impl AsepriteFile {
                         pixels,
                         &blend_mode,
                     ),
-                    pixel::Pixels::Grayscale(_) => todo!(),
+                    pixel::Pixels::Grayscale(grayscale_pixels) => {
+                        let pixels: Vec<pixel::Rgba> =
+                            grayscale_pixels.iter().map(Grayscale::as_rgba).collect();
+                        write_tilemap_cel_to_image(
+                            image,
+                            data,
+                            tilemap_data,
+                            tileset,
+                            &pixels,
+                            &blend_mode,
+                        );
+                    }
                     pixel::Pixels::Indexed(indexed_pixels) => {
                         let palette = self
                             .palette
