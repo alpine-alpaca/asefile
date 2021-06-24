@@ -84,7 +84,7 @@ impl CelsData {
     }
 
     fn check_valid_frame_id(&self, frame_id: u16) -> Result<()> {
-        if !((frame_id as usize) < self.data.len()) {
+        if (frame_id as usize) >= self.data.len() {
             return Err(AsepriteParseError::InvalidInput(format!(
                 "Invalid frame reference in Cel: {}",
                 frame_id
@@ -102,7 +102,7 @@ impl CelsData {
         if layers.len() < min_layers as usize {
             layers.resize_with(min_layers as usize, || None);
         }
-        if let Some(_) = layers[layer_id as usize] {
+        if layers[layer_id as usize].is_some() {
             return Err(AsepriteParseError::InvalidInput(format!(
                 "Multiple Cels for frame {}, layer {}",
                 frame_id, layer_id
@@ -117,10 +117,7 @@ impl CelsData {
         self.data[frame_id as usize]
             .iter()
             .enumerate()
-            .filter_map(|(layer_id, cel)| match cel.as_ref() {
-                Some(c) => Some((layer_id as u32, c)),
-                None => None,
-            })
+            .filter_map(|(layer_id, cel)| cel.as_ref().map(|c| (layer_id as u32, c)))
     }
 
     // Frame ID must be valid. If Layer ID is out of bounds always returns an

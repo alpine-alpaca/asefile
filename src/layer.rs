@@ -98,13 +98,10 @@ impl<'a> Layer<'a> {
     /// Does not indicate the blend order of layers (i.e., which layers are
     /// above or below).
     pub fn parent(&self) -> Option<Layer> {
-        match self.file.layers.parents[self.layer_id as usize] {
-            None => None,
-            Some(id) => Some(Layer {
-                file: self.file,
-                layer_id: id,
-            }),
-        }
+        self.file.layers.parents[self.layer_id as usize].map(|id| Layer {
+            file: self.file,
+            layer_id: id,
+        })
     }
 
     /// Returns if this layer is visible. This requires that this layer and all
@@ -153,12 +150,12 @@ impl LayersData {
         for l in &self.layers {
             if let LayerType::Tilemap(id) = l.layer_type {
                 // Validate that all Tilemap layers reference an existing Tileset.
-                tilesets
-                    .get(&id)
-                    .ok_or(AsepriteParseError::InvalidInput(format!(
+                tilesets.get(&id).ok_or_else(|| {
+                    AsepriteParseError::InvalidInput(format!(
                         "Tilemap layer references a missing tileset (id {}",
                         id.0
-                    )))?;
+                    ))
+                })?;
             }
         }
         Ok(())
@@ -228,8 +225,8 @@ pub(crate) fn parse_layer_chunk(data: &[u8]) -> Result<LayerData> {
     // );
 
     Ok(LayerData {
-        name,
         flags,
+        name,
         blend_mode,
         opacity,
         layer_type,
@@ -277,7 +274,7 @@ fn parse_blend_mode(id: u16) -> Result<BlendMode> {
     }
 }
 
-fn compute_parents(layers: &Vec<LayerData>) -> Vec<Option<u32>> {
+fn compute_parents(layers: &[LayerData]) -> Vec<Option<u32>> {
     let mut result = Vec::with_capacity(layers.len());
 
     for id in 0..layers.len() {

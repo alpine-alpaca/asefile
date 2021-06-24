@@ -329,7 +329,7 @@ impl AsepriteFile {
 
     pub(crate) fn layer_image(&self, frame: u16, layer_id: usize) -> RgbaImage {
         let mut image = RgbaImage::new(self.width as u32, self.height as u32);
-        for cel in self.framedata.cel(frame, layer_id as u16) {
+        if let Some(cel) = self.framedata.cel(frame, layer_id as u16) {
             self.write_cel(&mut image, cel);
         }
         image
@@ -417,7 +417,7 @@ fn blend_mode_to_blend_fn(mode: BlendMode) -> BlendFn {
 }
 
 fn tile_pixels<'a>(
-    pixels: &'a Vec<pixel::Rgba>,
+    pixels: &'a [pixel::Rgba],
     tile_size: &TileSize,
     tile_id: &TileId,
 ) -> &'a [pixel::Rgba] {
@@ -432,7 +432,7 @@ fn write_tilemap_cel_to_image(
     cel_data: &CelData,
     tilemap_data: &Tilemap,
     tileset: &Tileset,
-    pixels: &Vec<crate::pixel::Rgba>,
+    pixels: &[crate::pixel::Rgba],
     blend_mode: &BlendMode,
 ) {
     let CelData { x, y, opacity, .. } = cel_data;
@@ -482,7 +482,7 @@ fn write_raw_cel_to_image(
     image: &mut RgbaImage,
     cel_data: &CelData,
     image_size: &ImageSize,
-    pixels: &Vec<crate::pixel::Rgba>,
+    pixels: &[crate::pixel::Rgba],
     blend_mode: &BlendMode,
 ) {
     let ImageSize { width, height } = image_size;

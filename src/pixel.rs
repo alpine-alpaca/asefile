@@ -47,7 +47,7 @@ impl Indexed {
     pub(crate) fn value(&self) -> u8 {
         self.0
     }
-    pub(crate) fn to_rgba(
+    pub(crate) fn as_rgba(
         &self,
         palette: &ColorPalette,
         transparent_color_index: u8,
@@ -142,16 +142,18 @@ pub(crate) fn resolve_indexed(
     layer_is_background: bool,
 ) -> Result<Rgba> {
     pixel
-        .to_rgba(palette, transparent_color_index, layer_is_background)
-        .ok_or(AsepriteParseError::InvalidInput(format!(
-            "Index out of range: {} (max: {})",
-            pixel.value(),
-            palette.num_colors()
-        )))
+        .as_rgba(palette, transparent_color_index, layer_is_background)
+        .ok_or_else(|| {
+            AsepriteParseError::InvalidInput(format!(
+                "Index out of range: {} (max: {})",
+                pixel.value(),
+                palette.num_colors()
+            ))
+        })
 }
 
 pub(crate) fn resolve_indexed_pixels(
-    pixels: &Vec<Indexed>,
+    pixels: &[Indexed],
     palette: &ColorPalette,
     transparent_color_index: u8,
     layer_is_background: bool,

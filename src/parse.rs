@@ -33,9 +33,9 @@ impl ParseInfo {
     // Validate moves the ParseInfo data into an intermediate ValidatedParseInfo struct,
     // which is then used to create the AsepriteFile.
     fn validate(self, pixel_format: &PixelFormat) -> Result<ValidatedParseInfo> {
-        let layers = self.layers.ok_or(AsepriteParseError::InvalidInput(
-            "No layers found".to_owned(),
-        ))?;
+        let layers = self
+            .layers
+            .ok_or_else(|| AsepriteParseError::InvalidInput("No layers found".to_owned()))?;
         let tilesets = self.tilesets;
         let palette = self.palette;
         tilesets.validate(pixel_format, &palette)?;
@@ -172,11 +172,11 @@ pub fn read_aseprite<R: Read + Seek>(input: R) -> Result<AsepriteFile> {
         height,
         num_frames,
         pixel_format,
-        frame_times,
-        framedata,
-        layers,
         palette,
+        layers,
+        frame_times,
         tags,
+        framedata,
         external_files,
         tilesets,
     })

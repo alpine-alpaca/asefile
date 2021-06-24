@@ -117,7 +117,7 @@ impl Tileset {
 
     pub(crate) fn parse_chunk(data: &[u8], pixel_format: PixelFormat) -> Result<Tileset> {
         let mut reader = AseReader::new(data);
-        let id = reader.dword().map(|val| TilesetId(val))?;
+        let id = reader.dword().map(TilesetId)?;
         let flags = reader.dword().map(|val| TilesetFlags { bits: val })?;
         let empty_tile_is_id_zero = flags.contains(TilesetFlags::EMPTY_TILE_IS_ID_ZERO);
         let tile_count = reader.dword()?;
@@ -181,27 +181,28 @@ impl TilesetsById {
         pixel_format: &PixelFormat,
         palette: &Option<ColorPalette>,
     ) -> Result<()> {
-        for (_, tileset) in &self.0 {
+        for tileset in self.0.values() {
             // Validates that all Tilesets contain their own pixel data.
             // External file references currently not supported.
-            let pixels = tileset
-                .pixels
-                .as_ref()
-                .ok_or(AsepriteParseError::UnsupportedFeature(
+            let pixels = tileset.pixels.as_ref().ok_or_else(|| {
+                AsepriteParseError::UnsupportedFeature(
                     "Expected Tileset data to contain pixels. External file Tilesets not supported"
                         .into(),
-                ))?;
+                )
+            })?;
 
             if let Pixels::Indexed(indexed_pixels) = pixels {
                 if let Some(palette) = palette {
                     // Validates that all indexed pixels are in the palette's range.
                     for pixel in indexed_pixels {
                         let color = palette.color(pixel.value().into());
-                        color.ok_or(AsepriteParseError::InvalidInput(format!(
-                            "Index out of range: {} (max: {})",
-                            pixel.value(),
-                            palette.num_colors()
-                        )))?;
+                        color.ok_or_else(|| {
+                            AsepriteParseError::InvalidInput(format!(
+                                "Index out of range: {} (max: {})",
+                                pixel.value(),
+                                palette.num_colors()
+                            ))
+                        })?;
                     }
                 } else {
                     // Validates that a palette is present if the Tileset is Indexed.
