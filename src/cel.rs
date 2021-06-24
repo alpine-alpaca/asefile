@@ -1,3 +1,4 @@
+use crate::layer::{LayerData, LayerType};
 use crate::pixel::{self, Pixels};
 use crate::reader::AseReader;
 use crate::tilemap::Tilemap;
@@ -133,27 +134,23 @@ impl CelsData {
         }
     }
 
-    fn validate_cel(&self, frame: u32, layer_index: usize) -> Result<()> {
-        let layers = &self.data[frame as usize];
-        if let Some(ref cel) = layers[layer_index] {
+    fn validate_cel(&self, frame: u32, layer_index: usize, layer: &LayerData) -> Result<()> {
+        let by_layer = &self.data[frame as usize];
+        if let Some(ref cel) = by_layer[layer_index] {
             match &cel.content {
-                CelContent::Raw(image_content) => {
-                    match image_content.pixels {
-                        Pixels::Rgba(_) => {
-                            // TODO: Verify data length
-                        }
-                        Pixels::Grayscale(_) => {
-                            return Err(AsepriteParseError::UnsupportedFeature(
-                                "Grayscale images not supported".into(),
-                            ))
-                        }
-                        Pixels::Indexed(_) => {
-                            return Err(AsepriteParseError::InvalidInput(
-                                "Internal error: unresolved Indexed data".into(),
-                            ));
-                        }
+                CelContent::Raw(image_content) => match image_content.pixels {
+                    Pixels::Rgba(_) => {}
+                    Pixels::Grayscale(_) => {
+                        return Err(AsepriteParseError::UnsupportedFeature(
+                            "Grayscale images not supported".into(),
+                        ))
                     }
-                }
+                    Pixels::Indexed(_) => {
+                        return Err(AsepriteParseError::InvalidInput(
+                            "Internal error: unresolved Indexed data".into(),
+                        ));
+                    }
+                },
                 CelContent::Linked(other_frame) => {
                     match self.cel(*other_frame, layer_index as u16) {
                         Some(other_cel) => {
@@ -173,8 +170,15 @@ impl CelsData {
                     }
                 }
                 CelContent::Tilemap(_) => {
-
-                    // TODO: Verify
+                    // Verify that a Tilemap cel belongs to a Tilemap layer.
+                    if let LayerType::Tilemap(_) = layer.layer_type {
+                        // Tilemap Layer, ok
+                    } else {
+                        return Err(AsepriteParseError::InvalidInput(format!(
+                            "Invalid cel. Tilemap Cel (f:{},l:{}) outside of tilemap layer.",
+                            frame, layer_index
+                        )));
+                    }
                 }
             }
         }
@@ -222,11 +226,12 @@ impl CelsData {
         Ok(())
     }
 
-    pub fn validate(&self) -> Result<()> {
+    pub fn validate(&self, layers_data: &LayersData) -> Result<()> {
         for frame in 0..self.num_frames {
-            let layers = &self.data[frame as usize];
-            for layer in 0..layers.len() {
-                self.validate_cel(frame, layer)?;
+            let by_layer = &self.data[frame as usize];
+            for layer_index in 0..by_layer.len() {
+                let layer = &layers_data[layer_index as u32];
+                self.validate_cel(frame, layer_index, layer)?;
             }
         }
         Ok(())

@@ -1,5 +1,8 @@
 use crate::{
-    cel::Cel, reader::AseReader, tileset::TilesetId, AsepriteFile, AsepriteParseError, Result,
+    cel::Cel,
+    reader::AseReader,
+    tileset::{TilesetId, TilesetsById},
+    AsepriteFile, AsepriteParseError, Result,
 };
 use bitflags::bitflags;
 use std::{
@@ -144,6 +147,22 @@ pub struct LayersData {
     // before their children, i.e., lower index)
     pub(crate) layers: Vec<LayerData>,
     parents: Vec<Option<u32>>,
+}
+impl LayersData {
+    pub(crate) fn validate(&self, tilesets: &TilesetsById) -> Result<()> {
+        for l in &self.layers {
+            if let LayerType::Tilemap(id) = l.layer_type {
+                // Validate that all Tilemap layers reference an existing Tileset.
+                tilesets
+                    .get(&id)
+                    .ok_or(AsepriteParseError::InvalidInput(format!(
+                        "Tilemap layer references a missing tileset (id {}",
+                        id.0
+                    )))?;
+            }
+        }
+        Ok(())
+    }
 }
 
 impl Index<u32> for LayersData {

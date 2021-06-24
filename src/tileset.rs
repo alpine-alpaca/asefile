@@ -3,7 +3,7 @@ use std::{
     io::{Read, Seek},
 };
 
-use crate::{pixel::Pixels, PixelFormat, Result};
+use crate::{pixel::Pixels, AsepriteParseError, ColorPalette, PixelFormat, Result};
 use bitflags::bitflags;
 
 use crate::{external_file::ExternalFileId, reader::AseReader};
@@ -174,5 +174,51 @@ impl TilesetsById {
     }
     pub fn get(&self, id: &TilesetId) -> Option<&Tileset> {
         self.0.get(id)
+    }
+
+    pub(crate) fn validate(
+        &self,
+        pixel_format: &PixelFormat,
+        palette: &Option<ColorPalette>,
+    ) -> Result<()> {
+        for (_, tileset) in &self.0 {
+            // Validates that all Tilesets contain their own pixel data.
+            // External file references currently not supported.
+            let pixels = tileset
+                .pixels
+                .as_ref()
+                .ok_or(AsepriteParseError::UnsupportedFeature(
+                    "Expected Tileset data to contain pixels. External file Tilesets not supported"
+                        .into(),
+                ))?;
+
+            if let Pixels::Indexed(indexed_pixels) = pixels {
+                if let Some(palette) = palette {
+                    // Validates that all indexed pixels are in the palette's range.
+                    for pixel in indexed_pixels {
+                        let color = palette.color(pixel.value().into());
+                        color.ok_or(AsepriteParseError::InvalidInput(format!(
+                            "Index out of range: {} (max: {})",
+                            pixel.value(),
+                            palette.num_colors()
+                        )))?;
+                    }
+                } else {
+                    // Validates that a palette is present if the Tileset is Indexed.
+                    return Err(AsepriteParseError::InvalidInput(
+                        "Expected a palette present when resolving indexed image".into(),
+                    ));
+                }
+                // Validates that the file PixelFormat is indexed if the Tileset is indexed.
+                if let PixelFormat::Indexed { .. } = pixel_format {
+                    // Format matches tileset content, ok
+                } else {
+                    return Err(AsepriteParseError::InvalidInput(
+                        "Found indexed tileset pixels in non-indexed pixel format.".into(),
+                    ));
+                }
+            }
+        }
+        Ok(())
     }
 }

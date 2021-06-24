@@ -16,7 +16,7 @@ struct ParseInfo {
     frame_times: Vec<u16>,
     tags: Option<Vec<Tag>>,
     external_files: ExternalFilesById,
-    tileset: TilesetsById,
+    tilesets: TilesetsById,
 }
 
 impl ParseInfo {
@@ -30,6 +30,40 @@ impl ParseInfo {
             self.external_files.add(external_file);
         }
     }
+    // Validate moves the ParseInfo data into an intermediate ValidatedParseInfo struct,
+    // which is then used to create the AsepriteFile.
+    fn validate(self, pixel_format: &PixelFormat) -> Result<ValidatedParseInfo> {
+        let layers = self.layers.ok_or(AsepriteParseError::InvalidInput(
+            "No layers found".to_owned(),
+        ))?;
+        let tilesets = self.tilesets;
+        let palette = self.palette;
+        tilesets.validate(pixel_format, &palette)?;
+        layers.validate(&tilesets)?;
+
+        let framedata = self.framedata;
+        framedata.validate(&layers)?;
+
+        Ok(ValidatedParseInfo {
+            layers,
+            tilesets,
+            framedata,
+            external_files: self.external_files,
+            palette,
+            tags: self.tags.unwrap_or_default(),
+            frame_times: self.frame_times,
+        })
+    }
+}
+
+struct ValidatedParseInfo {
+    layers: layer::LayersData,
+    tilesets: TilesetsById,
+    framedata: cel::CelsData,
+    external_files: ExternalFilesById,
+    palette: Option<palette::ColorPalette>,
+    tags: Vec<Tag>,
+    frame_times: Vec<u16>,
 }
 
 // file format docs: https://github.com/aseprite/aseprite/blob/master/docs/ase-file-specs.md
@@ -83,7 +117,7 @@ pub fn read_aseprite<R: Read + Seek>(input: R) -> Result<AsepriteFile> {
         frame_times: vec![default_frame_time; num_frames as usize],
         tags: None,
         external_files: ExternalFilesById::new(),
-        tileset: TilesetsById::new(),
+        tilesets: TilesetsById::new(),
     };
 
     let pixel_format = parse_pixel_format(color_depth, transparent_color_index)?;
@@ -95,6 +129,7 @@ pub fn read_aseprite<R: Read + Seek>(input: R) -> Result<AsepriteFile> {
 
     let layers = parse_info
         .layers
+        .as_ref()
         .ok_or_else(|| AsepriteParseError::InvalidInput("No layers found".to_owned()))?;
 
     // println!("==== Layers ====\n{:#?}", layers);
@@ -122,21 +157,28 @@ pub fn read_aseprite<R: Read + Seek>(input: R) -> Result<AsepriteFile> {
         }
     }
 
-    parse_info.framedata.validate()?;
+    let ValidatedParseInfo {
+        layers,
+        tilesets,
+        framedata,
+        external_files,
+        palette,
+        tags,
+        frame_times,
+    } = parse_info.validate(&pixel_format)?;
 
     Ok(AsepriteFile {
         width,
         height,
         num_frames,
         pixel_format,
-        // color_profile: parse_info.color_profile,
-        frame_times: parse_info.frame_times,
-        framedata: parse_info.framedata,
+        frame_times,
+        framedata,
         layers,
-        palette: parse_info.palette,
-        tags: parse_info.tags.unwrap_or_default(),
-        external_files: parse_info.external_files,
-        tilesets: parse_info.tileset,
+        palette,
+        tags,
+        external_files,
+        tilesets,
     })
 }
 
@@ -229,7 +271,7 @@ fn parse_frame<R: Read + Seek>(
             }
             ChunkType::Tileset => {
                 let tileset = Tileset::parse_chunk(&chunk_data, pixel_format)?;
-                parse_info.tileset.add(tileset);
+                parse_info.tilesets.add(tileset);
             }
             ChunkType::CelExtra | ChunkType::Mask | ChunkType::Path => {
                 debug!("Ignoring unsupported chunk type: {:?}", chunk_type);

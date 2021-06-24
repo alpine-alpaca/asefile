@@ -245,10 +245,10 @@ impl AsepriteFile {
                         write_raw_cel_to_image(image, data, size, pixels, &blend_mode);
                     }
                     pixel::Pixels::Grayscale(_) => {
-                        panic!("Grayscale cel. Should have been caught by validate()");
+                        panic!("Grayscale cel. Should have been caught by CelsData::validate");
                     }
                     pixel::Pixels::Indexed(_) => {
-                        panic!("Indexed data cel. Should have been caught by validate()");
+                        panic!("Indexed data cel. Should have been caught by CelsData::validate");
                     }
                 }
             }
@@ -258,16 +258,18 @@ impl AsepriteFile {
                 let tileset_id = if let LayerType::Tilemap(tileset_id) = layer_type {
                     tileset_id
                 } else {
-                    panic!("Tilemap cel not in tilemap layer. Should be caught by validation");
+                    panic!(
+                        "Tilemap cel not in tilemap layer. Should have been caught by CelsData::validate"
+                    );
                 };
                 let tileset = self
                     .tilesets()
                     .get(&tileset_id)
-                    .expect("Tilemap layer references a missing tileset");
+                    .expect("Tilemap layer references a missing tileset. Should have been caught by LayersData::validate()");
                 let tileset_pixels = tileset
                     .pixels
                     .as_ref()
-                    .expect("Expected Tileset data to contain pixels");
+                    .expect("Expected Tileset data to contain pixels. Should have been caught by TilesetsById::validate()");
                 match tileset_pixels {
                     pixel::Pixels::Rgba(pixels) => write_tilemap_cel_to_image(
                         image,
@@ -282,14 +284,14 @@ impl AsepriteFile {
                         let palette = self
                             .palette
                             .as_ref()
-                            .expect("Expected a palette present when resolving indexed image");
+                            .expect("Expected a palette present when resolving indexed image. Should have been caught by TilesetsById::validate()");
                         let transparent_color_index = if let PixelFormat::Indexed {
                             transparent_color_index,
                         } = self.pixel_format
                         {
                             transparent_color_index
                         } else {
-                            panic!("Indexed tilemap pixels in non-indexed pixel format. Should have been caught by validate()")
+                            panic!("Indexed tilemap pixels in non-indexed pixel format. Should have been caught by TilesetsById::validate()")
                         };
                         let layer_is_background = self.layers[layer.id()].is_background();
                         let pixels = crate::pixel::resolve_indexed_pixels(
@@ -298,7 +300,7 @@ impl AsepriteFile {
                             transparent_color_index,
                             layer_is_background,
                         )
-                        .expect("Failed to resolve indexed pixels");
+                        .expect("Failed to resolve indexed pixels. Shoul have been caught by TilesetsById::validate()");
                         write_tilemap_cel_to_image(
                             image,
                             data,
@@ -313,7 +315,9 @@ impl AsepriteFile {
             CelContent::Linked(frame) => {
                 if let Some(cel) = self.framedata.cel(*frame, data.layer_index) {
                     if let CelContent::Linked(_) = cel.content {
-                        panic!("Cel links to empty cel. Should have been caught by validate()");
+                        panic!(
+                            "Cel links to empty cel. Should have been caught by CelsData::validate"
+                        );
                     } else {
                         // Recurse once with the source non-Linked cel
                         self.write_cel(image, cel);
