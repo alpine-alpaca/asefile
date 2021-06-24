@@ -3,16 +3,23 @@ use std::{
     io::{Read, Seek},
 };
 
-use crate::{pixel::Pixels, AsepriteParseError, ColorPalette, PixelFormat, Result};
+use crate::{
+    external_file::ExternalFile, pixel::Pixels, AsepriteParseError, ColorPalette, PixelFormat,
+    Result,
+};
 use bitflags::bitflags;
 
 use crate::{external_file::ExternalFileId, reader::AseReader};
+
+/// An id for a [Tileset].
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct TilesetId(pub(crate) u32);
 impl TilesetId {
-    pub(crate) fn new(value: u32) -> Self {
+    /// Create a new TilesetId over a raw u32 value.
+    pub fn new(value: u32) -> Self {
         Self(value)
     }
+    /// Get a reference to the underlying u32 value.
     pub fn value(&self) -> &u32 {
         &self.0
     }
@@ -31,17 +38,19 @@ bitflags! {
         const EMPTY_TILE_IS_ID_ZERO = 0x0004;
     }
 }
+
+/// A [Tileset] reference to an [ExternalFile].
 #[derive(Debug)]
 pub struct ExternalTilesetReference {
     external_file_id: ExternalFileId,
     tileset_id: TilesetId,
 }
 impl ExternalTilesetReference {
-    /// Id of the external file.
+    /// The id of the [ExternalFile].
     pub fn external_file_id(&self) -> &ExternalFileId {
         &self.external_file_id
     }
-    /// Tileset ID in the external file.
+    /// The id of the [Tileset] in the [ExternalFile].
     pub fn tileset_id(&self) -> &TilesetId {
         &self.tileset_id
     }
@@ -55,23 +64,27 @@ impl ExternalTilesetReference {
     }
 }
 
+/// The size of a tile in pixels.
 #[derive(Debug)]
 pub struct TileSize {
     width: u16,
     height: u16,
 }
 impl TileSize {
+    /// Tile width in pixels.
     pub fn width(&self) -> &u16 {
         &self.width
     }
+    /// Tile height in pixels.
     pub fn height(&self) -> &u16 {
         &self.height
     }
-    pub fn pixels_per_tile(&self) -> u16 {
+    pub(crate) fn pixels_per_tile(&self) -> u16 {
         self.width * self.height
     }
 }
 
+/// Various attributes of a tileset.
 #[derive(Debug)]
 pub struct Tileset {
     pub(crate) id: TilesetId,
@@ -107,6 +120,7 @@ impl Tileset {
     pub fn base_index(&self) -> &i16 {
         &self.base_index
     }
+    /// Tileset name. May not be unique among tilesets.
     pub fn name(&self) -> &String {
         &self.name
     }
@@ -160,6 +174,7 @@ impl Tileset {
         })
     }
 }
+/// A map of [TilesetId] values to [Tileset] instances.
 #[derive(Debug)]
 pub struct TilesetsById(HashMap<TilesetId, Tileset>);
 impl TilesetsById {
@@ -169,9 +184,11 @@ impl TilesetsById {
     pub(crate) fn add(&mut self, tileset: Tileset) {
         self.0.insert(*tileset.id(), tileset);
     }
+    /// Returns a reference to the underlying HashMap value.
     pub fn map(&self) -> &HashMap<TilesetId, Tileset> {
         &self.0
     }
+    /// Get a reference to a [Tileset] from a [TilesetId], if the entry exists.
     pub fn get(&self, id: &TilesetId) -> Option<&Tileset> {
         self.0.get(id)
     }
