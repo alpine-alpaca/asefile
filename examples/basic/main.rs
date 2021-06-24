@@ -14,8 +14,6 @@ fn main() {
         let output = format!("output_{}.png", frame);
         let outpath = basedir.join(&output);
         let img = ase.frame(frame).image();
-        img.unwrap()
-            .save_with_format(outpath, ImageFormat::Png)
-            .unwrap();
+        img.save_with_format(outpath, ImageFormat::Png).unwrap();
     }
 }
