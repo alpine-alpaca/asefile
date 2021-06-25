@@ -3,10 +3,7 @@ use std::{
     io::{Read, Seek},
 };
 
-use crate::{
-    external_file::ExternalFile, pixel::Pixels, AsepriteParseError, ColorPalette, PixelFormat,
-    Result,
-};
+use crate::{pixel::Pixels, AsepriteParseError, ColorPalette, PixelFormat, Result};
 use bitflags::bitflags;
 
 use crate::{external_file::ExternalFileId, reader::AseReader};
