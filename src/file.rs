@@ -459,11 +459,6 @@ fn write_tilemap_cel_to_image(
     let tile_width = *tile_size.width() as i32;
     let tile_height = *tile_size.height() as i32;
     // pixels
-    // let pixels = tileset
-    //     .pixels()
-    //     .as_ref()
-    //     .expect("Tileset missing tile pixel data")
-    //     .expect_rgba();
     let blend_fn = blend_mode_to_blend_fn(*blend_mode);
 
     for tile_y in 0..tilemap_height {
