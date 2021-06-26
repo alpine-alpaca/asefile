@@ -1,7 +1,9 @@
+use crate::external_file::{ExternalFile, ExternalFilesById};
+use crate::reader::AseReader;
+use crate::tileset::{Tileset, TilesetsById};
 use crate::{error::AsepriteParseError, AsepriteFile, PixelFormat};
-use byteorder::{LittleEndian, ReadBytesExt};
 use log::debug;
-use std::io::Read;
+use std::io::{Read, Seek};
 
 use crate::Result;
 use crate::{cel, color_profile, layer, palette, slice, tags, user_data, Tag};
@@ -13,6 +15,8 @@ struct ParseInfo {
     framedata: cel::CelsData, // Vec<Vec<cel::RawCel>>,
     frame_times: Vec<u16>,
     tags: Option<Vec<Tag>>,
+    external_files: ExternalFilesById,
+    tilesets: TilesetsById,
 }
 
 impl ParseInfo {
@@ -21,12 +25,53 @@ impl ParseInfo {
         // let idx = frame_id as usize;
         // self.framedata[idx].push(cel);
     }
+    fn add_external_files(&mut self, files: Vec<ExternalFile>) {
+        for external_file in files {
+            self.external_files.add(external_file);
+        }
+    }
+    // Validate moves the ParseInfo data into an intermediate ValidatedParseInfo struct,
+    // which is then used to create the AsepriteFile.
+    fn validate(self, pixel_format: &PixelFormat) -> Result<ValidatedParseInfo> {
+        let layers = self
+            .layers
+            .ok_or_else(|| AsepriteParseError::InvalidInput("No layers found".to_owned()))?;
+        let tilesets = self.tilesets;
+        let palette = self.palette;
+        tilesets.validate(pixel_format, &palette)?;
+        layers.validate(&tilesets)?;
+
+        let framedata = self.framedata;
+        framedata.validate(&layers)?;
+
+        Ok(ValidatedParseInfo {
+            layers,
+            tilesets,
+            framedata,
+            external_files: self.external_files,
+            palette,
+            tags: self.tags.unwrap_or_default(),
+            frame_times: self.frame_times,
+        })
+    }
+}
+
+struct ValidatedParseInfo {
+    layers: layer::LayersData,
+    tilesets: TilesetsById,
+    framedata: cel::CelsData,
+    external_files: ExternalFilesById,
+    palette: Option<palette::ColorPalette>,
+    tags: Vec<Tag>,
+    frame_times: Vec<u16>,
 }
 
 // file format docs: https://github.com/aseprite/aseprite/blob/master/docs/ase-file-specs.md
-pub fn read_aseprite<R: Read>(mut input: R) -> Result<AsepriteFile> {
-    let _size = input.read_u32::<LittleEndian>()?;
-    let magic_number = input.read_u16::<LittleEndian>()?;
+// v1.3 spec diff doc: https://gist.github.com/dacap/35f3b54fbcd021d099e0166a4f295bab
+pub fn read_aseprite<R: Read + Seek>(input: R) -> Result<AsepriteFile> {
+    let mut reader = AseReader::with(input);
+    let _size = reader.dword()?;
+    let magic_number = reader.word()?;
     if magic_number != 0xA5E0 {
         return Err(AsepriteParseError::InvalidInput(format!(
             "Invalid magic number for header: {:x} != {:x}",
@@ -34,26 +79,26 @@ pub fn read_aseprite<R: Read>(mut input: R) -> Result<AsepriteFile> {
         )));
     }
 
-    let num_frames = input.read_u16::<LittleEndian>()?;
-    let width = input.read_u16::<LittleEndian>()?;
-    let height = input.read_u16::<LittleEndian>()?;
-    let color_depth = input.read_u16::<LittleEndian>()?;
-    let _flags = input.read_u32::<LittleEndian>()?;
-    let default_frame_time = input.read_u16::<LittleEndian>()?;
-    let _placeholder1 = input.read_u32::<LittleEndian>()?;
-    let _placeholder2 = input.read_u32::<LittleEndian>()?;
-    let transparent_color_index = input.read_u8()?;
-    let _ignore1 = input.read_u8()?;
-    let _ignore2 = input.read_u16::<LittleEndian>()?;
-    let _num_colors = input.read_u16::<LittleEndian>()?;
-    let pixel_width = input.read_u8()?;
-    let pixel_height = input.read_u8()?;
-    let _grid_x = input.read_i16::<LittleEndian>()?;
-    let _grid_y = input.read_i16::<LittleEndian>()?;
-    let _grid_width = input.read_u16::<LittleEndian>()?;
-    let _grid_height = input.read_u16::<LittleEndian>()?;
+    let num_frames = reader.word()?;
+    let width = reader.word()?;
+    let height = reader.word()?;
+    let color_depth = reader.word()?;
+    let _flags = reader.dword()?;
+    let default_frame_time = reader.word()?;
+    let _placeholder1 = reader.dword()?;
+    let _placeholder2 = reader.dword()?;
+    let transparent_color_index = reader.byte()?;
+    let _ignore1 = reader.byte()?;
+    let _ignore2 = reader.word()?;
+    let _num_colors = reader.word()?;
+    let pixel_width = reader.byte()?;
+    let pixel_height = reader.byte()?;
+    let _grid_x = reader.short()?;
+    let _grid_y = reader.short()?;
+    let _grid_width = reader.word()?;
+    let _grid_height = reader.word()?;
     let mut rest = [0_u8; 84];
-    input.read_exact(&mut rest)?;
+    reader.read_exact(&mut rest)?;
 
     if !(pixel_width == 1 && pixel_height == 1) {
         return Err(AsepriteParseError::UnsupportedFeature(
@@ -71,17 +116,20 @@ pub fn read_aseprite<R: Read>(mut input: R) -> Result<AsepriteFile> {
         framedata,
         frame_times: vec![default_frame_time; num_frames as usize],
         tags: None,
+        external_files: ExternalFilesById::new(),
+        tilesets: TilesetsById::new(),
     };
 
     let pixel_format = parse_pixel_format(color_depth, transparent_color_index)?;
 
     for frame_id in 0..num_frames {
         // println!("--- Frame {} -------", frame_id);
-        parse_frame(&mut input, frame_id, pixel_format, &mut parse_info)?;
+        parse_frame(&mut reader, frame_id, pixel_format, &mut parse_info)?;
     }
 
     let layers = parse_info
         .layers
+        .as_ref()
         .ok_or_else(|| AsepriteParseError::InvalidInput("No layers found".to_owned()))?;
 
     // println!("==== Layers ====\n{:#?}", layers);
@@ -109,40 +157,49 @@ pub fn read_aseprite<R: Read>(mut input: R) -> Result<AsepriteFile> {
         }
     }
 
-    parse_info.framedata.validate()?;
+    let ValidatedParseInfo {
+        layers,
+        tilesets,
+        framedata,
+        external_files,
+        palette,
+        tags,
+        frame_times,
+    } = parse_info.validate(&pixel_format)?;
 
     Ok(AsepriteFile {
         width,
         height,
         num_frames,
         pixel_format,
-        // color_profile: parse_info.color_profile,
-        frame_times: parse_info.frame_times,
-        framedata: parse_info.framedata,
+        palette,
         layers,
-        palette: parse_info.palette,
-        tags: parse_info.tags.unwrap_or_default(),
+        frame_times,
+        tags,
+        framedata,
+        external_files,
+        tilesets,
     })
 }
 
-fn parse_frame<R: Read>(
-    input: &mut R,
+fn parse_frame<R: Read + Seek>(
+    reader: &mut AseReader<R>,
     frame_id: u16,
     pixel_format: PixelFormat,
     parse_info: &mut ParseInfo,
 ) -> Result<()> {
-    let bytes = input.read_u32::<LittleEndian>()?;
-    let magic_number = input.read_u16::<LittleEndian>()?;
+    let bytes = reader.dword()?;
+    let magic_number = reader.word()?;
     if magic_number != 0xF1FA {
         return Err(AsepriteParseError::InvalidInput(format!(
             "Invalid magic number for frame: {:x} != {:x}",
             magic_number, 0xF1FA
         )));
     }
-    let old_num_chunks = input.read_u16::<LittleEndian>()?;
-    let frame_duration_ms = input.read_u16::<LittleEndian>()?;
-    let _placeholder = input.read_u16::<LittleEndian>()?;
-    let new_num_chunks = input.read_u32::<LittleEndian>()?;
+    let old_num_chunks = reader.word()?;
+    let frame_duration_ms = reader.word()?;
+    let _placeholder = reader.word()?;
+    let new_num_chunks = reader.dword()?;
 
     parse_info.frame_times[frame_id as usize] = frame_duration_ms;
 
@@ -157,13 +214,13 @@ fn parse_frame<R: Read>(
     let mut bytes_available = bytes as i64 - 16;
     for _chunk in 0..num_chunks {
         // chunk size includes header
-        let chunk_size = input.read_u32::<LittleEndian>()?;
-        let chunk_type_code = input.read_u16::<LittleEndian>()?;
+        let chunk_size = reader.dword()?;
+        let chunk_type_code = reader.word()?;
         let chunk_type = parse_chunk_type(chunk_type_code)?;
         check_chunk_bytes(chunk_size, bytes_available)?;
         let chunk_data_bytes = chunk_size as usize - CHUNK_HEADER_SIZE;
         let mut chunk_data = vec![0_u8; chunk_data_bytes];
-        input.read_exact(&mut chunk_data)?;
+        reader.read_exact(&mut chunk_data)?;
         bytes_available -= chunk_size as i64;
         // println!(
         //     "chunk: {} size: {}, type: {:?}, bytes read: {}",
@@ -189,6 +246,10 @@ fn parse_frame<R: Read>(
                 let cel = cel::parse_cel_chunk(&chunk_data, pixel_format)?;
                 parse_info.add_cel(frame_id, cel)?;
             }
+            ChunkType::ExternalFiles => {
+                let files = ExternalFile::parse_chunk(&chunk_data)?;
+                parse_info.add_external_files(files);
+            }
             ChunkType::Tags => {
                 let tags = tags::parse_tags_chunk(&chunk_data)?;
                 if frame_id == 0 {
@@ -207,6 +268,10 @@ fn parse_frame<R: Read>(
             }
             ChunkType::OldPalette04 | ChunkType::OldPalette11 => {
                 // ignore old palette chunks
+            }
+            ChunkType::Tileset => {
+                let tileset = Tileset::parse_chunk(&chunk_data, pixel_format)?;
+                parse_info.tilesets.add(tileset);
             }
             ChunkType::CelExtra | ChunkType::Mask | ChunkType::Path => {
                 debug!("Ignoring unsupported chunk type: {:?}", chunk_type);
@@ -236,6 +301,8 @@ enum ChunkType {
     Tags,
     UserData,
     Slice,
+    ExternalFiles,
+    Tileset,
 }
 
 fn parse_chunk_type(chunk_type: u16) -> Result<ChunkType> {
@@ -246,12 +313,14 @@ fn parse_chunk_type(chunk_type: u16) -> Result<ChunkType> {
         0x2005 => Ok(ChunkType::Cel),
         0x2006 => Ok(ChunkType::CelExtra),
         0x2007 => Ok(ChunkType::ColorProfile),
+        0x2008 => Ok(ChunkType::ExternalFiles),
         0x2016 => Ok(ChunkType::Mask),
         0x2017 => Ok(ChunkType::Path),
         0x2018 => Ok(ChunkType::Tags),
         0x2019 => Ok(ChunkType::Palette),
         0x2020 => Ok(ChunkType::UserData),
         0x2022 => Ok(ChunkType::Slice),
+        0x2023 => Ok(ChunkType::Tileset),
         _ => Err(AsepriteParseError::UnsupportedFeature(format!(
             "Invalid or unsupported chunk type: 0x{:x}",
             chunk_type
@@ -275,14 +344,6 @@ fn check_chunk_bytes(chunk_size: u32, bytes_available: i64) -> Result<()> {
         )));
     }
     Ok(())
-}
-
-pub(crate) fn read_string<R: Read>(input: &mut R) -> Result<String> {
-    let str_len = input.read_u16::<LittleEndian>()?;
-    let mut str_bytes = vec![0_u8; str_len as usize];
-    input.read_exact(&mut str_bytes)?;
-    let s = String::from_utf8(str_bytes)?;
-    Ok(s)
 }
 
 fn parse_pixel_format(color_depth: u16, transparent_color_index: u8) -> Result<PixelFormat> {

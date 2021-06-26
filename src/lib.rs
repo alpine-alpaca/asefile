@@ -98,14 +98,20 @@ pub(crate) mod blend;
 pub(crate) mod cel;
 pub(crate) mod color_profile;
 pub(crate) mod error;
+pub(crate) mod external_file;
 pub(crate) mod file;
 pub(crate) mod layer;
 pub(crate) mod palette;
 pub(crate) mod parse;
+mod pixel;
+mod reader;
 pub(crate) mod slice;
 pub(crate) mod tags;
 #[cfg(test)]
 mod tests;
+mod tile;
+mod tilemap;
+mod tileset;
 pub(crate) mod user_data;
 
 /// A specialized `Result` type for Aseprite parsing functions.
@@ -114,7 +120,9 @@ pub type Result<T> = std::result::Result<T, AsepriteParseError>;
 pub use cel::Cel;
 // pub use color_profile::ColorProfile;
 pub use error::AsepriteParseError;
-pub use file::{AsepriteFile, Frame, PixelFormat, LayersIter};
+pub use external_file::{ExternalFile, ExternalFileId, ExternalFilesById};
+pub use file::{AsepriteFile, Frame, LayersIter, PixelFormat};
 pub use layer::{BlendMode, Layer, LayerFlags};
 pub use palette::{ColorPalette, ColorPaletteEntry};
 pub use tags::{AnimationDirection, Tag};
+pub use tileset::{ExternalTilesetReference, TileSize, Tileset, TilesetId, TilesetsById};

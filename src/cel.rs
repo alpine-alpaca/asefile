@@ -1,11 +1,14 @@
-use crate::layer::LayerFlags;
+use crate::layer::{LayerData, LayerType};
+use crate::pixel::{self, Pixels};
+use crate::reader::AseReader;
+use crate::tilemap::Tilemap;
 use crate::{
     layer::LayersData, AsepriteFile, AsepriteParseError, ColorPalette, PixelFormat, Result,
 };
-use byteorder::{LittleEndian, ReadBytesExt};
-use flate2::read::ZlibDecoder;
+
 use image::RgbaImage;
-use std::io::{Cursor, Read};
+use std::io::Read;
+use std::io::Seek;
 use std::{fmt, ops::DerefMut};
 
 /// A reference to a single Cel. This contains the image data at a specific
@@ -81,7 +84,7 @@ impl CelsData {
     }
 
     fn check_valid_frame_id(&self, frame_id: u16) -> Result<()> {
-        if !((frame_id as usize) < self.data.len()) {
+        if (frame_id as usize) >= self.data.len() {
             return Err(AsepriteParseError::InvalidInput(format!(
                 "Invalid frame reference in Cel: {}",
                 frame_id
@@ -93,13 +96,13 @@ impl CelsData {
     pub fn add_cel(&mut self, frame_id: u16, cel: RawCel) -> Result<()> {
         self.check_valid_frame_id(frame_id)?;
 
-        let layer_id = cel.layer_index;
+        let layer_id = cel.data.layer_index;
         let min_layers = layer_id as u32 + 1;
         let layers = &mut self.data[frame_id as usize];
         if layers.len() < min_layers as usize {
             layers.resize_with(min_layers as usize, || None);
         }
-        if let Some(_) = layers[layer_id as usize] {
+        if layers[layer_id as usize].is_some() {
             return Err(AsepriteParseError::InvalidInput(format!(
                 "Multiple Cels for frame {}, layer {}",
                 frame_id, layer_id
@@ -114,10 +117,7 @@ impl CelsData {
         self.data[frame_id as usize]
             .iter()
             .enumerate()
-            .filter_map(|(layer_id, cel)| match cel.as_ref() {
-                Some(c) => Some((layer_id as u32, c)),
-                None => None,
-            })
+            .filter_map(|(layer_id, cel)| cel.as_ref().map(|c| (layer_id as u32, c)))
     }
 
     // Frame ID must be valid. If Layer ID is out of bounds always returns an
@@ -131,35 +131,50 @@ impl CelsData {
         }
     }
 
-    fn validate_cel(&self, frame: u32, layer: usize) -> Result<()> {
-        let layers = &self.data[frame as usize];
-        if let Some(ref cel) = layers[layer] {
-            match &cel.data {
-                CelData::RawRgba { .. } => {
-                    // TODO: Verify data length
+    fn validate_cel(&self, frame: u32, layer_index: usize, layer: &LayerData) -> Result<()> {
+        let by_layer = &self.data[frame as usize];
+        if let Some(ref cel) = by_layer[layer_index] {
+            match &cel.content {
+                CelContent::Raw(image_content) => match image_content.pixels {
+                    Pixels::Rgba(_) => {}
+                    Pixels::Grayscale(_) => {
+                        return Err(AsepriteParseError::UnsupportedFeature(
+                            "Grayscale images not supported".into(),
+                        ))
+                    }
+                    Pixels::Indexed(_) => {
+                        return Err(AsepriteParseError::InvalidInput(
+                            "Internal error: unresolved Indexed data".into(),
+                        ));
+                    }
                 },
-                CelData::RawIndexed { .. } => {
-                    return Err(AsepriteParseError::InvalidInput("Internal error: unresolved Indexed data".into()));
-                }
-                CelData::Linked(other_frame) => {
-                    match self.cel(*other_frame, layer as u16) {
+                CelContent::Linked(other_frame) => {
+                    match self.cel(*other_frame, layer_index as u16) {
                         Some(other_cel) => {
-                            match &other_cel.data {
-                                CelData::RawRgba {..} | CelData::RawIndexed {..} => {},
-                                CelData::Linked(_) => {
-                                    return Err(AsepriteParseError::InvalidInput(
-                                        format!("Invalid Cel reference. Cel (f:{},l:{}) links to cel (f:{},l:{}) but that cel links to another cel.",
-                                    frame, layer, *other_frame, layer)
-                                    ))
-                                }
+                            if let CelContent::Linked(_) = &other_cel.content {
+                                return Err(AsepriteParseError::InvalidInput(
+                                    format!("Invalid Cel reference. Cel (f:{},l:{}) links to cel (f:{},l:{}) but that cel links to another cel.",
+                                frame, layer_index, *other_frame, layer_index)
+                                ))
                             }
                         }
                         None => {
                             return Err(AsepriteParseError::InvalidInput(
                                 format!("Invalid Cel reference. Cel (f:{},l:{}) links to cel (f:{},l:{}) but that cel contains no data.",
-                            frame, layer, *other_frame, layer)
+                            frame, layer_index, *other_frame, layer_index)
                             ))
                         }
+                    }
+                }
+                CelContent::Tilemap(_) => {
+                    // Verify that a Tilemap cel belongs to a Tilemap layer.
+                    if let LayerType::Tilemap(_) = layer.layer_type {
+                        // Tilemap Layer, ok
+                    } else {
+                        return Err(AsepriteParseError::InvalidInput(format!(
+                            "Invalid cel. Tilemap Cel (f:{},l:{}) outside of tilemap layer.",
+                            frame, layer_index
+                        )));
                     }
                 }
             }
@@ -185,40 +200,22 @@ impl CelsData {
             let layers = &mut self.data[frame as usize];
             for mut cel in layers {
                 if let Some(cel) = cel.deref_mut() {
-                    if let CelData::RawIndexed {
-                        ref width,
-                        ref height,
-                        ref mut data,
-                    } = cel.data
-                    {
-                        let mut output: Vec<u8> = Vec::with_capacity(4 * data.0.len());
-                        let layer_is_background = layer_info[cel.layer_index as u32]
-                            .flags
-                            .contains(LayerFlags::BACKGROUND);
-                        for index in &data.0 {
-                            if *index as u32 >= max_col {
-                                return Err(AsepriteParseError::InvalidInput(format!(
-                                    "Index out of range: {} (max: {})",
-                                    *index, max_col
-                                )));
-                            }
-                            let col = palette.color(*index as u32).unwrap();
-                            let alpha = if *index == transparent_color_index && !layer_is_background
-                            {
-                                0
-                            } else {
-                                col.alpha()
-                            };
-                            output.push(col.red());
-                            output.push(col.green());
-                            output.push(col.blue());
-                            output.push(alpha);
+                    if let CelContent::Raw(data) = &cel.content {
+                        if let Pixels::Indexed(pixels) = &data.pixels {
+                            let layer_index = cel.data.layer_index as u32;
+                            let layer = &layer_info[layer_index];
+                            let layer_is_background = layer.is_background();
+                            let rgba_pixels = pixel::resolve_indexed_pixels(
+                                pixels,
+                                palette,
+                                transparent_color_index,
+                                layer_is_background,
+                            )?;
+                            cel.content = CelContent::Raw(ImageContent {
+                                size: data.size,
+                                pixels: Pixels::Rgba(rgba_pixels),
+                            })
                         }
-                        cel.data = CelData::RawRgba {
-                            width: *width,
-                            height: *height,
-                            data: CelBytes(output),
-                        };
                     }
                 }
             }
@@ -226,139 +223,126 @@ impl CelsData {
         Ok(())
     }
 
-    pub fn validate(&self) -> Result<()> {
+    pub fn validate(&self, layers_data: &LayersData) -> Result<()> {
         for frame in 0..self.num_frames {
-            let layers = &self.data[frame as usize];
-            for layer in 0..layers.len() {
-                self.validate_cel(frame, layer)?;
+            let by_layer = &self.data[frame as usize];
+            for layer_index in 0..by_layer.len() {
+                let layer = &layers_data[layer_index as u32];
+                self.validate_cel(frame, layer_index, layer)?;
             }
         }
         Ok(())
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct ImageSize {
+    pub width: u16,
+    pub height: u16,
+}
+impl ImageSize {
+    pub(crate) fn parse<R: Read + Seek>(reader: &mut AseReader<R>) -> Result<Self> {
+        let width = reader.word()?;
+        let height = reader.word()?;
+        Ok(Self { width, height })
+    }
+    pub(crate) fn pixel_count(&self) -> usize {
+        self.width as usize * self.height as usize
+    }
+}
+
+// CelData holds fields which are common to all cel types.
 #[derive(Debug)]
-pub(crate) struct RawCel {
+pub(crate) struct CelData {
     pub layer_index: u16,
     pub x: i16,
     pub y: i16,
     pub opacity: u8,
-    pub data: CelData,
 }
-
-pub(crate) struct CelBytes(pub Vec<u8>);
-
-#[derive(Debug)]
-pub(crate) enum CelData {
-    RawRgba {
-        width: u16,
-        height: u16,
-        data: CelBytes,
-    },
-    RawIndexed {
-        width: u16,
-        height: u16,
-        data: CelBytes,
-    },
-    Linked(u16),
-    // ZlibData { width: u16, height: u16, data: CelBytes },
-}
-
-impl fmt::Debug for CelBytes {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "<{} bytes>", self.0.len())
+impl CelData {
+    fn parse<R: Read + Seek>(reader: &mut AseReader<R>) -> Result<Self> {
+        let layer_index = reader.word()?;
+        let x = reader.short()?;
+        let y = reader.short()?;
+        let opacity = reader.byte()?;
+        Ok(Self {
+            layer_index,
+            x,
+            y,
+            opacity,
+        })
     }
 }
 
-pub(crate) fn parse_cel_chunk(data: &[u8], pixel_format: PixelFormat) -> Result<RawCel> {
-    let mut input = Cursor::new(data);
+pub(crate) struct ImageContent {
+    pub size: ImageSize,
+    pub pixels: Pixels,
+}
 
-    let layer_index = input.read_u16::<LittleEndian>()?;
-    let x = input.read_i16::<LittleEndian>()?;
-    let y = input.read_i16::<LittleEndian>()?;
-    let opacity = input.read_u8()?;
-    let cel_type = input.read_u16::<LittleEndian>()?;
-    let mut reserved = [0_u8; 7];
-    input.read_exact(&mut reserved)?;
-
-    let cel_data = match cel_type {
-        0 => {
-            // Raw cel
-            let width = input.read_u16::<LittleEndian>()?;
-            let height = input.read_u16::<LittleEndian>()?;
-            let data_size = width as usize * height as usize * pixel_format.bytes_per_pixel();
-            let mut output = Vec::with_capacity(data_size);
-            input.take(data_size as u64).read_to_end(&mut output)?;
-            if output.len() != data_size {
-                return Err(AsepriteParseError::InvalidInput(format!(
-                    "Invalid cel data size. Expected: {}, Actual: {}",
-                    data_size,
-                    output.len()
-                )));
-            }
-            match pixel_format {
-                PixelFormat::Rgba => CelData::RawRgba {
-                    width,
-                    height,
-                    data: CelBytes(output),
-                },
-                PixelFormat::Grayscale => CelData::RawRgba {
-                    width,
-                    height,
-                    data: CelBytes(output),
-                },
-                PixelFormat::Indexed { .. } => CelData::RawIndexed {
-                    width,
-                    height,
-                    data: CelBytes(output),
-                },
-            }
-        }
-        1 => {
-            // Linked cel
-            let linked = input.read_u16::<LittleEndian>()?;
-            CelData::Linked(linked)
-        }
-        2 => {
-            // Compressed cel
-            let width = input.read_u16::<LittleEndian>()?;
-            let height = input.read_u16::<LittleEndian>()?;
-            let expected_output_size =
-                width as usize * height as usize * pixel_format.bytes_per_pixel();
-            let decoded_data = unzip(input, expected_output_size)?;
-            match pixel_format {
-                PixelFormat::Rgba => CelData::RawRgba {
-                    width,
-                    height,
-                    data: CelBytes(decoded_data),
-                },
-                PixelFormat::Grayscale => CelData::RawRgba {
-                    width,
-                    height,
-                    data: CelBytes(decoded_data),
-                },
-                PixelFormat::Indexed { .. } => CelData::RawIndexed {
-                    width,
-                    height,
-                    data: CelBytes(decoded_data),
-                },
-            }
-        }
-        _ => {
-            return Err(AsepriteParseError::InvalidInput(format!(
+// CelContent holds data specific to each type of cel.
+#[derive(Debug)]
+pub(crate) enum CelContent {
+    Raw(ImageContent),
+    Linked(u16),
+    Tilemap(Tilemap),
+}
+impl CelContent {
+    fn parse<R: Read + Seek>(
+        mut reader: AseReader<R>,
+        pixel_format: PixelFormat,
+        cel_type: u16,
+    ) -> Result<Self> {
+        match cel_type {
+            0 => parse_raw_cel(reader, pixel_format).map(CelContent::Raw),
+            1 => reader.word().map(CelContent::Linked),
+            2 => parse_compressed_cel(reader, pixel_format).map(CelContent::Raw),
+            3 => Tilemap::parse_chunk(reader).map(CelContent::Tilemap),
+            _ => Err(AsepriteParseError::InvalidInput(format!(
                 "Invalid/Unsupported Cel type: {}",
                 cel_type
-            )))
+            ))),
         }
-    };
+    }
+}
 
-    Ok(RawCel {
-        layer_index,
-        x,
-        y,
-        opacity,
-        data: cel_data,
-    })
+impl fmt::Debug for ImageContent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "<{} bytes>", self.pixels.byte_count())
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct RawCel {
+    pub data: CelData,
+    pub content: CelContent,
+}
+
+fn parse_raw_cel<R: Read + Seek>(
+    mut reader: AseReader<R>,
+    pixel_format: PixelFormat,
+) -> Result<ImageContent> {
+    let size = ImageSize::parse(&mut reader)?;
+    Pixels::from_raw(reader, pixel_format, size.pixel_count())
+        .map(|pixels| ImageContent { size, pixels })
+}
+
+fn parse_compressed_cel<R: Read + Seek>(
+    mut reader: AseReader<R>,
+    pixel_format: PixelFormat,
+) -> Result<ImageContent> {
+    let size = ImageSize::parse(&mut reader)?;
+    Pixels::from_compressed(reader, pixel_format, size.pixel_count())
+        .map(|pixels| ImageContent { size, pixels })
+}
+
+pub(crate) fn parse_cel_chunk(data: &[u8], pixel_format: PixelFormat) -> Result<RawCel> {
+    let mut reader = AseReader::new(data);
+    let data = CelData::parse(&mut reader)?;
+    let cel_type = reader.word()?;
+    // Reserved bytes
+    reader.skip_bytes(7)?;
+
+    CelContent::parse(reader, pixel_format, cel_type).map(|content| RawCel { data, content })
 }
 
 // For debugging
@@ -373,11 +357,4 @@ fn dump_bytes(data: &[u8]) {
             println!();
         }
     }
-}
-
-pub(crate) fn unzip(input: Cursor<&[u8]>, expected_output_size: usize) -> Result<Vec<u8>> {
-    let mut decoder = ZlibDecoder::new(input);
-    let mut buffer = Vec::with_capacity(expected_output_size);
-    decoder.read_to_end(&mut buffer)?;
-    Ok(buffer)
 }

@@ -1,7 +1,14 @@
-use crate::{cel::Cel, parse::read_string, AsepriteFile, AsepriteParseError, Result};
+use crate::{
+    cel::Cel,
+    reader::AseReader,
+    tileset::{TilesetId, TilesetsById},
+    AsepriteFile, AsepriteParseError, Result,
+};
 use bitflags::bitflags;
-use byteorder::{LittleEndian, ReadBytesExt};
-use std::{io::Cursor, ops::Index};
+use std::{
+    io::{Read, Seek},
+    ops::Index,
+};
 
 /// Types of layer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -11,6 +18,9 @@ pub enum LayerType {
     /// A layer that groups other layers and does not contain any image data.
     /// In Aseprite these are represented by a folder icon.
     Group,
+    /// A tilemap layer. Contains the tileset index.
+    /// In Aseprite these are represented by a grid icon.
+    Tilemap(TilesetId),
 }
 
 bitflags! {
@@ -77,7 +87,7 @@ impl<'a> Layer<'a> {
         self.data().opacity
     }
 
-    /// Describes whether this is a regular layer or a group layer.
+    /// Describes whether this is a regular, group, or tilemap layer.
     pub fn layer_type(&self) -> LayerType {
         self.data().layer_type
     }
@@ -88,13 +98,10 @@ impl<'a> Layer<'a> {
     /// Does not indicate the blend order of layers (i.e., which layers are
     /// above or below).
     pub fn parent(&self) -> Option<Layer> {
-        match self.file.layers.parents[self.layer_id as usize] {
-            None => None,
-            Some(id) => Some(Layer {
-                file: self.file,
-                layer_id: id,
-            }),
-        }
+        self.file.layers.parents[self.layer_id as usize].map(|id| Layer {
+            file: self.file,
+            layer_id: id,
+        })
     }
 
     /// Returns if this layer is visible. This requires that this layer and all
@@ -125,6 +132,11 @@ pub struct LayerData {
     pub(crate) layer_type: LayerType,
     child_level: u16,
 }
+impl LayerData {
+    pub(crate) fn is_background(&self) -> bool {
+        self.flags.contains(LayerFlags::BACKGROUND)
+    }
+}
 
 #[derive(Debug)]
 pub struct LayersData {
@@ -132,6 +144,22 @@ pub struct LayersData {
     // before their children, i.e., lower index)
     pub(crate) layers: Vec<LayerData>,
     parents: Vec<Option<u32>>,
+}
+impl LayersData {
+    pub(crate) fn validate(&self, tilesets: &TilesetsById) -> Result<()> {
+        for l in &self.layers {
+            if let LayerType::Tilemap(id) = l.layer_type {
+                // Validate that all Tilemap layers reference an existing Tileset.
+                tilesets.get(&id).ok_or_else(|| {
+                    AsepriteParseError::InvalidInput(format!(
+                        "Tilemap layer references a missing tileset (id {}",
+                        id.0
+                    ))
+                })?;
+            }
+        }
+        Ok(())
+    }
 }
 
 impl Index<u32> for LayersData {
@@ -173,22 +201,22 @@ pub enum BlendMode {
 }
 
 pub(crate) fn parse_layer_chunk(data: &[u8]) -> Result<LayerData> {
-    let mut input = Cursor::new(data);
+    let mut reader = AseReader::new(data);
 
-    let flags = input.read_u16::<LittleEndian>()?;
-    let layer_type = input.read_u16::<LittleEndian>()?;
-    let child_level = input.read_u16::<LittleEndian>()?;
-    let _default_width = input.read_u16::<LittleEndian>()?;
-    let _default_height = input.read_u16::<LittleEndian>()?;
-    let blend_mode = input.read_u16::<LittleEndian>()?;
-    let opacity = input.read_u8()?;
-    let _reserved1 = input.read_u8()?;
-    let _reserved2 = input.read_u16::<LittleEndian>()?;
-    let name = read_string(&mut input)?;
+    let flags = reader.word()?;
+    let layer_type = reader.word()?;
+    let child_level = reader.word()?;
+    let _default_width = reader.word()?;
+    let _default_height = reader.word()?;
+    let blend_mode = reader.word()?;
+    let opacity = reader.byte()?;
+    let _reserved1 = reader.byte()?;
+    let _reserved2 = reader.word()?;
+    let name = reader.string()?;
+    let layer_type = parse_layer_type(layer_type, &mut reader)?;
 
     let flags = LayerFlags::from_bits_truncate(flags as u32);
 
-    let layer_type = parse_layer_type(layer_type)?;
     let blend_mode = parse_blend_mode(blend_mode)?;
 
     // println!(
@@ -197,8 +225,8 @@ pub(crate) fn parse_layer_chunk(data: &[u8]) -> Result<LayerData> {
     // );
 
     Ok(LayerData {
-        name,
         flags,
+        name,
         blend_mode,
         opacity,
         layer_type,
@@ -206,10 +234,11 @@ pub(crate) fn parse_layer_chunk(data: &[u8]) -> Result<LayerData> {
     })
 }
 
-fn parse_layer_type(id: u16) -> Result<LayerType> {
+fn parse_layer_type<R: Read + Seek>(id: u16, reader: &mut AseReader<R>) -> Result<LayerType> {
     match id {
         0 => Ok(LayerType::Image),
         1 => Ok(LayerType::Group),
+        2 => reader.dword().map(TilesetId::new).map(LayerType::Tilemap),
         _ => Err(AsepriteParseError::InvalidInput(format!(
             "Invalid layer type: {}",
             id
@@ -245,7 +274,7 @@ fn parse_blend_mode(id: u16) -> Result<BlendMode> {
     }
 }
 
-fn compute_parents(layers: &Vec<LayerData>) -> Vec<Option<u32>> {
+fn compute_parents(layers: &[LayerData]) -> Vec<Option<u32>> {
     let mut result = Vec::with_capacity(layers.len());
 
     for id in 0..layers.len() {

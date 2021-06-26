@@ -326,6 +326,34 @@ fn palette() {
     assert_eq!(pal.color(71).unwrap().raw_rgba8(), [0, 0, 0, 83]);
 }
 
+#[test]
+fn tileset() {
+    let f = load_test_file("tileset");
+    let img = f.frame(0).image();
+    assert_eq!(f.size(), (32, 32));
+    let ts = f
+        .tilesets()
+        .get(&tileset::TilesetId::new(0))
+        .expect("No tileset found");
+    assert_eq!(ts.name(), "test_tileset");
+
+    compare_with_reference_image(img, "tileset");
+}
+
+#[test]
+fn tileset_indexed() {
+    let f = load_test_file("tileset_indexed");
+    let img = f.frame(0).image();
+    assert_eq!(f.size(), (32, 32));
+    let ts = &f
+        .tilesets()
+        .get(&tileset::TilesetId::new(0))
+        .expect("No tileset found");
+    assert_eq!(ts.name(), "test_tileset");
+
+    compare_with_reference_image(img, "tileset_indexed");
+}
+
 /*
 #[test]
 fn gen_random_pixels() {

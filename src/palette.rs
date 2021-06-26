@@ -1,7 +1,5 @@
-use crate::{parse::read_string, AsepriteParseError, Result};
-use byteorder::{LittleEndian, ReadBytesExt};
+use crate::{reader::AseReader, AsepriteParseError, Result};
 use nohash::IntMap;
-use std::io::Cursor;
 
 /// The color palette embedded in the file.
 #[derive(Debug)]
@@ -73,12 +71,13 @@ impl ColorPaletteEntry {
 }
 
 pub(crate) fn parse_palette_chunk(data: &[u8]) -> Result<ColorPalette> {
-    let mut input = Cursor::new(data);
+    let mut reader = AseReader::new(data);
 
-    let _num_total_entries = input.read_u32::<LittleEndian>()?;
-    let first_color_index = input.read_u32::<LittleEndian>()?;
-    let last_color_index = input.read_u32::<LittleEndian>()?;
-    let _reserved = input.read_u64::<LittleEndian>()?;
+    let _num_total_entries = reader.dword()?;
+    let first_color_index = reader.dword()?;
+    let last_color_index = reader.dword()?;
+    // Reserved bytes
+    reader.skip_bytes(8)?;
 
     if last_color_index < first_color_index {
         return Err(AsepriteParseError::InvalidInput(format!(
@@ -92,13 +91,13 @@ pub(crate) fn parse_palette_chunk(data: &[u8]) -> Result<ColorPalette> {
     let mut entries = IntMap::default();
 
     for id in 0..count {
-        let flags = input.read_u16::<LittleEndian>()?;
-        let red = input.read_u8()?;
-        let green = input.read_u8()?;
-        let blue = input.read_u8()?;
-        let alpha = input.read_u8()?;
+        let flags = reader.word()?;
+        let red = reader.byte()?;
+        let green = reader.byte()?;
+        let blue = reader.byte()?;
+        let alpha = reader.byte()?;
         let name = if flags & 1 == 1 {
-            let s = read_string(&mut input)?;
+            let s = reader.string()?;
             Some(s)
         } else {
             None
