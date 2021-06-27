@@ -3,8 +3,12 @@ use std::{
     io::{Read, Seek},
 };
 
-use crate::{pixel::Pixels, AsepriteParseError, ColorPalette, PixelFormat, Result};
+use crate::{
+    pixel::{self, Pixels},
+    AsepriteParseError, ColorPalette, PixelFormat, Result,
+};
 use bitflags::bitflags;
+use image::{Pixel, RgbaImage};
 
 use crate::{external_file::ExternalFileId, reader::AseReader};
 
@@ -124,6 +128,43 @@ impl Tileset {
     /// When Some, includes a link to an external file.
     pub fn external_file(&self) -> Option<&ExternalTilesetReference> {
         self.external_file.as_ref()
+    }
+
+    /// Construct the image of each tile in the [Tileset].
+    /// The image has width equal to the tile width and height equal to (tile_height * tile_count).
+    pub fn image(&self) -> RgbaImage {
+        let Tileset {
+            tile_size,
+            tile_count,
+            pixels,
+            ..
+        } = self;
+        let TileSize {
+            width: tile_width,
+            height: tile_height,
+        } = tile_size;
+        let image_height = tile_count * *tile_height as u32;
+        let mut image = RgbaImage::new(*tile_width as u32, image_height);
+        if let Some(pixel::Pixels::Rgba(rgba_pixels)) = pixels {
+            for tile_idx in 0..*tile_count {
+                for tile_x in 0..*tile_width {
+                    for tile_y in 0..*tile_height {
+                        let pixel_y = tile_y as u32 * tile_idx;
+                        let pixel_idx = pixel_y + tile_x as u32;
+                        let pixel = rgba_pixels[pixel_idx as usize];
+                        let image_pixel = image::Rgba::from_channels(
+                            pixel.red,
+                            pixel.green,
+                            pixel.blue,
+                            pixel.alpha,
+                        );
+                        image.put_pixel(tile_x.into(), pixel_y, image_pixel);
+                    }
+                }
+            }
+        }
+
+        image
     }
 
     pub(crate) fn parse_chunk(data: &[u8], pixel_format: PixelFormat) -> Result<Tileset> {
