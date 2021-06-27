@@ -76,8 +76,7 @@ pub(crate) fn parse_palette_chunk(data: &[u8]) -> Result<ColorPalette> {
     let _num_total_entries = reader.dword()?;
     let first_color_index = reader.dword()?;
     let last_color_index = reader.dword()?;
-    // Reserved bytes
-    reader.skip_bytes(8)?;
+    reader.skip_reserved(8)?;
 
     if last_color_index < first_color_index {
         return Err(AsepriteParseError::InvalidInput(format!(

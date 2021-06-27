@@ -1,8 +1,5 @@
 use crate::{reader::AseReader, tilemap::TileBitmaskHeader, Result};
-use std::{
-    io::{Read, Seek},
-    ops::Index,
-};
+use std::{io::Read, ops::Index};
 
 #[derive(Debug)]
 pub(crate) struct TileId(pub(crate) u32);
@@ -14,12 +11,14 @@ pub(crate) struct Tile {
     pub flip_y: bool,
     pub rotate_90cw: bool,
 }
+
 impl Tile {
     pub(crate) fn new(chunk: &[u8], header: &TileBitmaskHeader) -> Result<Self> {
         AseReader::new(chunk)
             .dword()
             .map(|bits| Self::parse(bits, header))
     }
+
     fn parse(bits: u32, header: &TileBitmaskHeader) -> Self {
         Self {
             id: TileId(bits & header.tile_id),
@@ -32,8 +31,9 @@ impl Tile {
 
 #[derive(Debug)]
 pub(crate) struct Tiles(Vec<Tile>);
+
 impl Tiles {
-    pub(crate) fn unzip<T: Read + Seek>(
+    pub(crate) fn unzip<T: Read>(
         reader: AseReader<T>,
         expected_tile_count: usize,
         header: &TileBitmaskHeader,
@@ -48,6 +48,7 @@ impl Tiles {
         Ok(Self(tiles?))
     }
 }
+
 impl Index<usize> for Tiles {
     type Output = Tile;
 

@@ -3,7 +3,7 @@ use crate::reader::AseReader;
 use crate::tileset::{Tileset, TilesetsById};
 use crate::{error::AsepriteParseError, AsepriteFile, PixelFormat};
 use log::debug;
-use std::io::{Read, Seek};
+use std::io::Read;
 
 use crate::Result;
 use crate::{cel, color_profile, layer, palette, slice, tags, user_data, Tag};
@@ -68,7 +68,7 @@ struct ValidatedParseInfo {
 
 // file format docs: https://github.com/aseprite/aseprite/blob/master/docs/ase-file-specs.md
 // v1.3 spec diff doc: https://gist.github.com/dacap/35f3b54fbcd021d099e0166a4f295bab
-pub fn read_aseprite<R: Read + Seek>(input: R) -> Result<AsepriteFile> {
+pub fn read_aseprite<R: Read>(input: R) -> Result<AsepriteFile> {
     let mut reader = AseReader::with(input);
     let _size = reader.dword()?;
     let magic_number = reader.word()?;
@@ -97,7 +97,7 @@ pub fn read_aseprite<R: Read + Seek>(input: R) -> Result<AsepriteFile> {
     let _grid_y = reader.short()?;
     let _grid_width = reader.word()?;
     let _grid_height = reader.word()?;
-    reader.skip_bytes(84)?;  // reserved for future use
+    reader.skip_reserved(84)?;
 
     if !(pixel_width == 1 && pixel_height == 1) {
         return Err(AsepriteParseError::UnsupportedFeature(
@@ -180,7 +180,7 @@ pub fn read_aseprite<R: Read + Seek>(input: R) -> Result<AsepriteFile> {
     })
 }
 
-fn parse_frame<R: Read + Seek>(
+fn parse_frame<R: Read>(
     reader: &mut AseReader<R>,
     frame_id: u16,
     pixel_format: PixelFormat,
@@ -321,7 +321,7 @@ struct Chunk {
 }
 
 impl Chunk {
-    fn parse<R: Read + Seek>(bytes_available: &mut i64, reader: &mut AseReader<R>) -> Result<Self> {
+    fn parse<R: Read>(bytes_available: &mut i64, reader: &mut AseReader<R>) -> Result<Self> {
         let chunk_size = reader.dword()?;
         let chunk_type_code = reader.word()?;
         let chunk_type = parse_chunk_type(chunk_type_code)?;
@@ -332,10 +332,7 @@ impl Chunk {
         let mut data = vec![0_u8; chunk_data_bytes];
         reader.read_exact(&mut data)?;
         *bytes_available -= chunk_size as i64;
-        Ok(Chunk {
-            data,
-            chunk_type,
-        })
+        Ok(Chunk { data, chunk_type })
     }
 }
 

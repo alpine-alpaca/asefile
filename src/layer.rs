@@ -5,10 +5,7 @@ use crate::{
     AsepriteFile, AsepriteParseError, Result,
 };
 use bitflags::bitflags;
-use std::{
-    io::{Read, Seek},
-    ops::Index,
-};
+use std::{io::Read, ops::Index};
 
 /// Types of layer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -132,6 +129,7 @@ pub struct LayerData {
     pub(crate) layer_type: LayerType,
     child_level: u16,
 }
+
 impl LayerData {
     pub(crate) fn is_background(&self) -> bool {
         self.flags.contains(LayerFlags::BACKGROUND)
@@ -234,7 +232,7 @@ pub(crate) fn parse_layer_chunk(data: &[u8]) -> Result<LayerData> {
     })
 }
 
-fn parse_layer_type<R: Read + Seek>(id: u16, reader: &mut AseReader<R>) -> Result<LayerType> {
+fn parse_layer_type<R: Read>(id: u16, reader: &mut AseReader<R>) -> Result<LayerType> {
     match id {
         0 => Ok(LayerType::Image),
         1 => Ok(LayerType::Group),

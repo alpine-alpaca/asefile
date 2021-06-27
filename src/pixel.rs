@@ -1,5 +1,5 @@
 use crate::{reader::AseReader, AsepriteParseError, ColorPalette, PixelFormat, Result};
-use std::io::{Read, Seek};
+use std::io::Read;
 
 // From Aseprite file spec:
 // PIXEL: One pixel, depending on the image pixel format:
@@ -13,6 +13,7 @@ pub(crate) struct Rgba {
     pub blue: u8,
     pub alpha: u8,
 }
+
 impl Rgba {
     fn new(chunk: &[u8]) -> Result<Self> {
         let mut reader = AseReader::new(chunk);
@@ -28,11 +29,13 @@ impl Rgba {
         })
     }
 }
+
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Grayscale {
     value: u8,
     alpha: u8,
 }
+
 impl Grayscale {
     fn new(chunk: &[u8]) -> Result<Self> {
         let mut reader = AseReader::new(chunk);
@@ -50,12 +53,15 @@ impl Grayscale {
         }
     }
 }
+
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Indexed(u8);
+
 impl Indexed {
     pub(crate) fn value(&self) -> u8 {
         self.0
     }
+
     pub(crate) fn as_rgba(
         &self,
         palette: &ColorPalette,
@@ -82,12 +88,14 @@ impl Indexed {
 fn output_size(pixel_format: PixelFormat, expected_pixel_count: usize) -> usize {
     pixel_format.bytes_per_pixel() * expected_pixel_count
 }
+
 #[derive(Debug)]
 pub(crate) enum Pixels {
     Rgba(Vec<Rgba>),
     Grayscale(Vec<Grayscale>),
     Indexed(Vec<Indexed>),
 }
+
 impl Pixels {
     fn from_bytes(bytes: Vec<u8>, pixel_format: PixelFormat) -> Result<Self> {
         match pixel_format {
@@ -115,7 +123,8 @@ impl Pixels {
             }
         }
     }
-    pub(crate) fn from_raw<T: Read + Seek>(
+
+    pub(crate) fn from_raw<T: Read>(
         reader: AseReader<T>,
         pixel_format: PixelFormat,
         expected_pixel_count: usize,
@@ -125,7 +134,8 @@ impl Pixels {
             .take_bytes(expected_output_size)
             .and_then(|bytes| Self::from_bytes(bytes, pixel_format))
     }
-    pub(crate) fn from_compressed<T: Read + Seek>(
+
+    pub(crate) fn from_compressed<T: Read>(
         reader: AseReader<T>,
         pixel_format: PixelFormat,
         expected_pixel_count: usize,
@@ -135,6 +145,7 @@ impl Pixels {
             .unzip(expected_output_size)
             .and_then(|bytes| Self::from_bytes(bytes, pixel_format))
     }
+
     pub(crate) fn byte_count(&self) -> usize {
         match self {
             Pixels::Rgba(v) => v.len() * 4,

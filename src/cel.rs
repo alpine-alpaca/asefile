@@ -8,7 +8,6 @@ use crate::{
 
 use image::RgbaImage;
 use std::io::Read;
-use std::io::Seek;
 use std::{fmt, ops::DerefMut};
 
 /// A reference to a single Cel. This contains the image data at a specific
@@ -241,7 +240,7 @@ pub(crate) struct ImageSize {
     pub height: u16,
 }
 impl ImageSize {
-    pub(crate) fn parse<R: Read + Seek>(reader: &mut AseReader<R>) -> Result<Self> {
+    pub(crate) fn parse<R: Read>(reader: &mut AseReader<R>) -> Result<Self> {
         let width = reader.word()?;
         let height = reader.word()?;
         Ok(Self { width, height })
@@ -260,7 +259,7 @@ pub(crate) struct CelData {
     pub opacity: u8,
 }
 impl CelData {
-    fn parse<R: Read + Seek>(reader: &mut AseReader<R>) -> Result<Self> {
+    fn parse<R: Read>(reader: &mut AseReader<R>) -> Result<Self> {
         let layer_index = reader.word()?;
         let x = reader.short()?;
         let y = reader.short()?;
@@ -287,7 +286,7 @@ pub(crate) enum CelContent {
     Tilemap(Tilemap),
 }
 impl CelContent {
-    fn parse<R: Read + Seek>(
+    fn parse<R: Read>(
         mut reader: AseReader<R>,
         pixel_format: PixelFormat,
         cel_type: u16,
@@ -317,7 +316,7 @@ pub(crate) struct RawCel {
     pub content: CelContent,
 }
 
-fn parse_raw_cel<R: Read + Seek>(
+fn parse_raw_cel<R: Read>(
     mut reader: AseReader<R>,
     pixel_format: PixelFormat,
 ) -> Result<ImageContent> {
@@ -326,7 +325,7 @@ fn parse_raw_cel<R: Read + Seek>(
         .map(|pixels| ImageContent { size, pixels })
 }
 
-fn parse_compressed_cel<R: Read + Seek>(
+fn parse_compressed_cel<R: Read>(
     mut reader: AseReader<R>,
     pixel_format: PixelFormat,
 ) -> Result<ImageContent> {
@@ -339,8 +338,7 @@ pub(crate) fn parse_cel_chunk(data: &[u8], pixel_format: PixelFormat) -> Result<
     let mut reader = AseReader::new(data);
     let data = CelData::parse(&mut reader)?;
     let cel_type = reader.word()?;
-    // Reserved bytes
-    reader.skip_bytes(7)?;
+    reader.skip_reserved(7)?;
 
     CelContent::parse(reader, pixel_format, cel_type).map(|content| RawCel { data, content })
 }
