@@ -160,13 +160,12 @@ impl Tileset {
                 let pixel_idx_offset = tile_idx * pixels_per_tile;
                 // tile_y and tile_x are positions relative to the current tile.
                 for tile_y in 0..tile_height {
-                    // pixel_y is the absolute position of the pixel on the image.
+                    // pixel_y is the absolute y position of the pixel on the image.
                     let pixel_y = tile_y + (tile_idx * tile_height);
                     for tile_x in 0..tile_width {
                         let sub_index = (tile_y * tile_width) + tile_x;
                         let pixel_idx = sub_index + pixel_idx_offset;
                         let pixel = rgba_pixels[pixel_idx as usize];
-                        dbg!((pixel_idx, tile_x, pixel_y));
                         let image_pixel = image::Rgba::from_channels(
                             pixel.red,
                             pixel.green,
