@@ -3,7 +3,7 @@ use crate::reader::AseReader;
 use crate::tileset::{Tileset, TilesetsById};
 use crate::{error::AsepriteParseError, AsepriteFile, PixelFormat};
 use log::debug;
-use std::io::{Read, Seek};
+use std::io::Read;
 
 use crate::Result;
 use crate::{cel, color_profile, layer, palette, slice, tags, user_data, Tag};
@@ -68,7 +68,7 @@ struct ValidatedParseInfo {
 
 // file format docs: https://github.com/aseprite/aseprite/blob/master/docs/ase-file-specs.md
 // v1.3 spec diff doc: https://gist.github.com/dacap/35f3b54fbcd021d099e0166a4f295bab
-pub fn read_aseprite<R: Read + Seek>(input: R) -> Result<AsepriteFile> {
+pub fn read_aseprite<R: Read>(input: R) -> Result<AsepriteFile> {
     let mut reader = AseReader::with(input);
     let _size = reader.dword()?;
     let magic_number = reader.word()?;
@@ -97,8 +97,7 @@ pub fn read_aseprite<R: Read + Seek>(input: R) -> Result<AsepriteFile> {
     let _grid_y = reader.short()?;
     let _grid_width = reader.word()?;
     let _grid_height = reader.word()?;
-    let mut rest = [0_u8; 84];
-    reader.read_exact(&mut rest)?;
+    reader.skip_reserved(84)?;
 
     if !(pixel_width == 1 && pixel_height == 1) {
         return Err(AsepriteParseError::UnsupportedFeature(
@@ -107,8 +106,7 @@ pub fn read_aseprite<R: Read + Seek>(input: R) -> Result<AsepriteFile> {
     }
 
     let framedata = cel::CelsData::new(num_frames as u32);
-    // let mut framedata = Vec::with_capacity(num_frames as usize);
-    // framedata.resize_with(num_frames as usize, Vec::new);
+
     let mut parse_info = ParseInfo {
         palette: None,
         color_profile: None,
@@ -182,13 +180,13 @@ pub fn read_aseprite<R: Read + Seek>(input: R) -> Result<AsepriteFile> {
     })
 }
 
-fn parse_frame<R: Read + Seek>(
+fn parse_frame<R: Read>(
     reader: &mut AseReader<R>,
     frame_id: u16,
     pixel_format: PixelFormat,
     parse_info: &mut ParseInfo,
 ) -> Result<()> {
-    let bytes = reader.dword()?;
+    let num_bytes = reader.dword()?;
     let magic_number = reader.word()?;
     if magic_number != 0xF1FA {
         return Err(AsepriteParseError::InvalidInput(format!(
@@ -211,47 +209,33 @@ fn parse_frame<R: Read + Seek>(
 
     let mut found_layers: Vec<layer::LayerData> = Vec::new();
 
-    let mut bytes_available = bytes as i64 - 16;
+    let mut bytes_available = num_bytes as i64 - FRAME_HEADER_SIZE;
     for _chunk in 0..num_chunks {
-        // chunk size includes header
-        let chunk_size = reader.dword()?;
-        let chunk_type_code = reader.word()?;
-        let chunk_type = parse_chunk_type(chunk_type_code)?;
-        check_chunk_bytes(chunk_size, bytes_available)?;
-        let chunk_data_bytes = chunk_size as usize - CHUNK_HEADER_SIZE;
-        let mut chunk_data = vec![0_u8; chunk_data_bytes];
-        reader.read_exact(&mut chunk_data)?;
-        bytes_available -= chunk_size as i64;
-        // println!(
-        //     "chunk: {} size: {}, type: {:?}, bytes read: {}",
-        //     chunk,
-        //     chunk_size,
-        //     chunk_type,
-        //     chunk_data.len()
-        // );
-        match chunk_type {
+        let chunk = Chunk::parse(&mut bytes_available, reader)?;
+
+        match chunk.chunk_type {
             ChunkType::ColorProfile => {
-                let profile = color_profile::parse_color_profile(&chunk_data)?;
+                let profile = color_profile::parse_color_profile(&chunk.data)?;
                 parse_info.color_profile = Some(profile);
             }
             ChunkType::Palette => {
-                let palette = palette::parse_palette_chunk(&chunk_data)?;
+                let palette = palette::parse_palette_chunk(&chunk.data)?;
                 parse_info.palette = Some(palette);
             }
             ChunkType::Layer => {
-                let layer = layer::parse_layer_chunk(&chunk_data)?;
+                let layer = layer::parse_layer_chunk(&chunk.data)?;
                 found_layers.push(layer);
             }
             ChunkType::Cel => {
-                let cel = cel::parse_cel_chunk(&chunk_data, pixel_format)?;
+                let cel = cel::parse_cel_chunk(&chunk.data, pixel_format)?;
                 parse_info.add_cel(frame_id, cel)?;
             }
             ChunkType::ExternalFiles => {
-                let files = ExternalFile::parse_chunk(&chunk_data)?;
+                let files = ExternalFile::parse_chunk(&chunk.data)?;
                 parse_info.add_external_files(files);
             }
             ChunkType::Tags => {
-                let tags = tags::parse_tags_chunk(&chunk_data)?;
+                let tags = tags::parse_tags_chunk(&chunk.data)?;
                 if frame_id == 0 {
                     parse_info.tags = Some(tags);
                 } else {
@@ -259,22 +243,22 @@ fn parse_frame<R: Read + Seek>(
                 }
             }
             ChunkType::Slice => {
-                let _slice = slice::parse_slice_chunk(&chunk_data)?;
+                let _slice = slice::parse_slice_chunk(&chunk.data)?;
                 //println!("Slice: {:#?}", slice);
             }
             ChunkType::UserData => {
-                let _ud = user_data::parse_userdata_chunk(&chunk_data)?;
+                let _ud = user_data::parse_userdata_chunk(&chunk.data)?;
                 //println!("Userdata: {:#?}", ud);
             }
             ChunkType::OldPalette04 | ChunkType::OldPalette11 => {
                 // ignore old palette chunks
             }
             ChunkType::Tileset => {
-                let tileset = Tileset::parse_chunk(&chunk_data, pixel_format)?;
+                let tileset = Tileset::parse_chunk(&chunk.data, pixel_format)?;
                 parse_info.tilesets.add(tileset);
             }
             ChunkType::CelExtra | ChunkType::Mask | ChunkType::Path => {
-                debug!("Ignoring unsupported chunk type: {:?}", chunk_type);
+                debug!("Ignoring unsupported chunk type: {:?}", chunk.chunk_type);
             }
         }
     }
@@ -329,6 +313,28 @@ fn parse_chunk_type(chunk_type: u16) -> Result<ChunkType> {
 }
 
 const CHUNK_HEADER_SIZE: usize = 6;
+const FRAME_HEADER_SIZE: i64 = 16;
+
+struct Chunk {
+    data: Vec<u8>,
+    chunk_type: ChunkType,
+}
+
+impl Chunk {
+    fn parse<R: Read>(bytes_available: &mut i64, reader: &mut AseReader<R>) -> Result<Self> {
+        let chunk_size = reader.dword()?;
+        let chunk_type_code = reader.word()?;
+        let chunk_type = parse_chunk_type(chunk_type_code)?;
+
+        check_chunk_bytes(chunk_size, *bytes_available)?;
+
+        let chunk_data_bytes = chunk_size as usize - CHUNK_HEADER_SIZE;
+        let mut data = vec![0_u8; chunk_data_bytes];
+        reader.read_exact(&mut data)?;
+        *bytes_available -= chunk_size as i64;
+        Ok(Chunk { data, chunk_type })
+    }
+}
 
 fn check_chunk_bytes(chunk_size: u32, bytes_available: i64) -> Result<()> {
     if (chunk_size as usize) < CHUNK_HEADER_SIZE {

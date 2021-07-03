@@ -1,4 +1,4 @@
-use std::io::{Read, Seek};
+use std::io::Read;
 
 use crate::{reader::AseReader, tile, AsepriteParseError, Result};
 
@@ -10,8 +10,9 @@ pub(crate) struct Tilemap {
     pub bits_per_tile: u16,
     pub bitmask_header: TileBitmaskHeader,
 }
+
 impl Tilemap {
-    pub(crate) fn parse_chunk<R: Read + Seek>(mut reader: AseReader<R>) -> Result<Self> {
+    pub(crate) fn parse_chunk<R: Read>(mut reader: AseReader<R>) -> Result<Self> {
         let width = reader.word()?;
         let height = reader.word()?;
         let bits_per_tile = reader.word()?;
@@ -22,8 +23,7 @@ impl Tilemap {
             )));
         }
         let bitmask_header = TileBitmaskHeader::parse(&mut reader)?;
-        // Reserved bytes
-        reader.skip_bytes(10)?;
+        reader.skip_reserved(10)?;
         let expected_tile_count = width as usize * height as usize;
         let tiles = tile::Tiles::unzip(reader, expected_tile_count, &bitmask_header)?;
         Ok(Self {
@@ -43,8 +43,9 @@ pub(crate) struct TileBitmaskHeader {
     pub y_flip: u32,
     pub rotate_90cw: u32,
 }
+
 impl TileBitmaskHeader {
-    pub(crate) fn parse<R: Read + Seek>(reader: &mut AseReader<R>) -> Result<Self> {
+    pub(crate) fn parse<R: Read>(reader: &mut AseReader<R>) -> Result<Self> {
         let tile_id = reader.dword()?;
         let x_flip = reader.dword()?;
         let y_flip = reader.dword()?;

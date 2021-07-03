@@ -49,8 +49,7 @@ pub(crate) fn parse_tags_chunk(data: &[u8]) -> Result<Vec<Tag>> {
     let mut reader = AseReader::new(data);
 
     let num_tags = reader.word()?;
-    // Reserved bytes
-    reader.skip_bytes(8)?;
+    reader.skip_reserved(8)?;
 
     let mut result = Vec::with_capacity(num_tags as usize);
 
@@ -58,8 +57,7 @@ pub(crate) fn parse_tags_chunk(data: &[u8]) -> Result<Vec<Tag>> {
         let from_frame = reader.word()?;
         let to_frame = reader.word()?;
         let anim_dir = reader.byte()?;
-        // Reserved bytes
-        reader.skip_bytes(8)?;
+        reader.skip_reserved(8)?;
         let _color = reader.dword()?;
         let name = reader.string()?;
         let animation_direction = parse_animation_direction(anim_dir)?;

@@ -1,7 +1,4 @@
-use std::{
-    collections::HashMap,
-    io::{Read, Seek},
-};
+use std::{collections::HashMap, io::Read};
 
 use crate::{
     pixel::{self, Pixels},
@@ -15,6 +12,7 @@ use crate::{external_file::ExternalFileId, reader::AseReader};
 /// An id for a [Tileset].
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct TilesetId(pub(crate) u32);
+
 impl TilesetId {
     /// Create a new TilesetId over a raw u32 value.
     pub fn new(value: u32) -> Self {
@@ -25,6 +23,7 @@ impl TilesetId {
         &self.0
     }
 }
+
 bitflags! {
     struct TilesetFlags: u32 {
         // Include link to external file.
@@ -46,21 +45,22 @@ pub struct ExternalTilesetReference {
     external_file_id: ExternalFileId,
     tileset_id: TilesetId,
 }
+
 impl ExternalTilesetReference {
     /// The id of the [ExternalFile].
     pub fn external_file_id(&self) -> &ExternalFileId {
         &self.external_file_id
     }
+
     /// The id of the [Tileset] in the [ExternalFile].
     pub fn tileset_id(&self) -> &TilesetId {
         &self.tileset_id
     }
-    fn parse<T: Read + Seek>(reader: &mut AseReader<T>) -> Result<Self> {
-        let external_file_id = reader.dword().map(ExternalFileId::new)?;
-        let tileset_id = reader.dword().map(TilesetId)?;
+
+    fn parse<T: Read>(reader: &mut AseReader<T>) -> Result<Self> {
         Ok(ExternalTilesetReference {
-            external_file_id,
-            tileset_id,
+            external_file_id: reader.dword().map(ExternalFileId::new)?,
+            tileset_id: reader.dword().map(TilesetId)?,
         })
     }
 }
@@ -71,15 +71,18 @@ pub struct TileSize {
     width: u16,
     height: u16,
 }
+
 impl TileSize {
     /// Tile width in pixels.
     pub fn width(&self) -> &u16 {
         &self.width
     }
+
     /// Tile height in pixels.
     pub fn height(&self) -> &u16 {
         &self.height
     }
+
     pub(crate) fn pixels_per_tile(&self) -> u16 {
         self.width * self.height
     }
@@ -97,34 +100,41 @@ pub struct Tileset {
     pub(crate) external_file: Option<ExternalTilesetReference>,
     pub(crate) pixels: Option<Pixels>,
 }
+
 impl Tileset {
     /// Tileset id.
     pub fn id(&self) -> &TilesetId {
         &self.id
     }
+
     /// From the Aseprite file spec:
     /// When true, tilemaps using this tileset use tile ID=0 as empty tile.
     /// In rare cases this is false, the empty tile will be equal to 0xffffffff (used in internal versions of Aseprite).
     pub fn empty_tile_is_id_zero(&self) -> &bool {
         &self.empty_tile_is_id_zero
     }
+
     /// Number of tiles.
     pub fn tile_count(&self) -> &u32 {
         &self.tile_count
     }
+
     /// Tile width and height.
     pub fn tile_size(&self) -> &TileSize {
         &self.tile_size
     }
+
     /// Number to show in the UI for the tile with index=0. Default is 1.
     /// Only used for Aseprite UI purposes. Not used for data representation.
     pub fn base_index(&self) -> &i16 {
         &self.base_index
     }
+
     /// Tileset name. May not be unique among tilesets.
     pub fn name(&self) -> &String {
         &self.name
     }
+
     /// When Some, includes a link to an external file.
     pub fn external_file(&self) -> Option<&ExternalTilesetReference> {
         self.external_file.as_ref()
@@ -186,9 +196,9 @@ impl Tileset {
             height: tile_height,
         };
         let base_index = reader.short()?;
-        // Reserved bytes
-        reader.skip_bytes(14)?;
+        reader.skip_reserved(14)?;
         let name = reader.string()?;
+
         let external_file = {
             if !flags.contains(TilesetFlags::LINKS_EXTERNAL_FILE) {
                 None
@@ -218,20 +228,25 @@ impl Tileset {
         })
     }
 }
+
 /// A map of [TilesetId] values to [Tileset] instances.
 #[derive(Debug)]
 pub struct TilesetsById(HashMap<TilesetId, Tileset>);
+
 impl TilesetsById {
     pub(crate) fn new() -> Self {
         Self(HashMap::new())
     }
+
     pub(crate) fn add(&mut self, tileset: Tileset) {
         self.0.insert(*tileset.id(), tileset);
     }
+
     /// Returns a reference to the underlying HashMap value.
     pub fn map(&self) -> &HashMap<TilesetId, Tileset> {
         &self.0
     }
+
     /// Get a reference to a [Tileset] from a [TilesetId], if the entry exists.
     pub fn get(&self, id: &TilesetId) -> Option<&Tileset> {
         self.0.get(id)

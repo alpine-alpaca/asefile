@@ -1,6 +1,6 @@
 use std::{
     fs::File,
-    io::{BufReader, Read, Seek},
+    io::{BufReader, Read},
     path::Path,
 };
 
@@ -75,10 +75,10 @@ impl AsepriteFile {
         parse::read_aseprite(reader)
     }
 
-    /// Load Aseprite file from any input that implements `std::io::Read` and `std::io::Seek`.
+    /// Load Aseprite file from any input that implements `std::io::Read`.
     ///
     /// You can use this to read from an in-memory file.
-    pub fn read<R: Read + Seek>(input: R) -> Result<AsepriteFile> {
+    pub fn read<R: Read>(input: R) -> Result<AsepriteFile> {
         parse::read_aseprite(input)
     }
 

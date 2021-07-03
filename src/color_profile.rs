@@ -19,8 +19,7 @@ pub(crate) fn parse_color_profile(data: &[u8]) -> Result<ColorProfile> {
     let profile_type = reader.word()?;
     let flags = reader.word()?;
     let _fixed_gamma = reader.dword()?;
-    // Reserved bytes
-    reader.skip_bytes(8)?;
+    reader.skip_reserved(8)?;
 
     let profile_type = parse_color_profile_type(profile_type)?;
     let fixed_gamma = if flags & 1 != 0 {
