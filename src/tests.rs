@@ -327,8 +327,8 @@ fn palette() {
 }
 
 #[test]
-fn tileset() {
-    let f = load_test_file("tileset");
+fn tilemap() {
+    let f = load_test_file("tilemap");
     let img = f.frame(0).image();
     assert_eq!(f.size(), (32, 32));
     let ts = f
@@ -337,21 +337,33 @@ fn tileset() {
         .expect("No tileset found");
     assert_eq!(ts.name(), "test_tileset");
 
-    compare_with_reference_image(img, "tileset");
+    compare_with_reference_image(img, "tilemap");
 }
 
 #[test]
-fn tileset_indexed() {
-    let f = load_test_file("tileset_indexed");
+fn tilemap_indexed() {
+    let f = load_test_file("tilemap_indexed");
     let img = f.frame(0).image();
     assert_eq!(f.size(), (32, 32));
-    let ts = &f
+    let ts = f
         .tilesets()
         .get(&tileset::TilesetId::new(0))
         .expect("No tileset found");
     assert_eq!(ts.name(), "test_tileset");
 
-    compare_with_reference_image(img, "tileset_indexed");
+    compare_with_reference_image(img, "tilemap_indexed");
+}
+
+#[test]
+fn tileset_export() {
+    let f = load_test_file("tileset");
+    let tileset = f
+        .tilesets()
+        .get(&tileset::TilesetId::new(0))
+        .expect("No tileset found");
+    let img = tileset.image();
+
+    compare_with_reference_image(img, "tileset");
 }
 
 /*

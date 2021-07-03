@@ -139,26 +139,32 @@ impl Tileset {
             pixels,
             ..
         } = self;
-        let TileSize {
-            width: tile_width,
-            height: tile_height,
-        } = tile_size;
-        let image_height = tile_count * *tile_height as u32;
-        let mut image = RgbaImage::new(*tile_width as u32, image_height);
+        let TileSize { width, height } = tile_size;
+        let tile_width = *width as u32;
+        let tile_height = *height as u32;
+        let pixels_per_tile = tile_size.pixels_per_tile() as u32;
+        let image_height = tile_count * tile_height;
+        let mut image = RgbaImage::new(tile_width, image_height);
         if let Some(pixel::Pixels::Rgba(rgba_pixels)) = pixels {
             for tile_idx in 0..*tile_count {
-                for tile_x in 0..*tile_width {
-                    for tile_y in 0..*tile_height {
-                        let pixel_y = tile_y as u32 * tile_idx;
-                        let pixel_idx = pixel_y + tile_x as u32;
+                let pixel_idx_offset = tile_idx * pixels_per_tile;
+                // tile_y and tile_x are positions relative to the current tile.
+                for tile_y in 0..tile_height {
+                    // pixel_y is the absolute position of the pixel on the image.
+                    let pixel_y = tile_y + (tile_idx * tile_height);
+                    for tile_x in 0..tile_width {
+                        let sub_index = (tile_y * tile_width) + tile_x;
+                        let pixel_idx = sub_index + pixel_idx_offset;
                         let pixel = rgba_pixels[pixel_idx as usize];
+                        dbg!((pixel_idx, tile_x, pixel_y));
                         let image_pixel = image::Rgba::from_channels(
                             pixel.red,
                             pixel.green,
                             pixel.blue,
                             pixel.alpha,
                         );
-                        image.put_pixel(tile_x.into(), pixel_y, image_pixel);
+                        // Absolute pixel x is equal to tile_x.
+                        image.put_pixel(tile_x, pixel_y, image_pixel);
                     }
                 }
             }
