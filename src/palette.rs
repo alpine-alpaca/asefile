@@ -1,4 +1,4 @@
-use crate::{reader::AseReader, AsepriteParseError, Result};
+use crate::{pixel, reader::AseReader, AsepriteParseError, Result};
 use nohash::IntMap;
 
 /// The color palette embedded in the file.
@@ -29,6 +29,20 @@ impl ColorPalette {
     /// this constraint using the Aseprite GUI.
     pub fn color(&self, index: u32) -> Option<&ColorPaletteEntry> {
         self.entries.get(&index)
+    }
+
+    pub(crate) fn validate_indexed_pixels(&self, indexed_pixels: &[pixel::Indexed]) -> Result<()> {
+        for pixel in indexed_pixels {
+            let color = self.color(pixel.value().into());
+            color.ok_or_else(|| {
+                AsepriteParseError::InvalidInput(format!(
+                    "Index out of range: {} (max: {})",
+                    pixel.value(),
+                    self.num_colors()
+                ))
+            })?;
+        }
+        Ok(())
     }
 }
 

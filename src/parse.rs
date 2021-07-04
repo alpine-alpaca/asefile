@@ -42,7 +42,7 @@ impl ParseInfo {
         layers.validate(&tilesets)?;
 
         let framedata = self.framedata;
-        framedata.validate(&layers)?;
+        framedata.validate(&layers, palette.as_ref())?;
 
         Ok(ValidatedParseInfo {
             layers,
@@ -123,36 +123,6 @@ pub fn read_aseprite<R: Read>(input: R) -> Result<AsepriteFile> {
     for frame_id in 0..num_frames {
         // println!("--- Frame {} -------", frame_id);
         parse_frame(&mut reader, frame_id, pixel_format, &mut parse_info)?;
-    }
-
-    let layers = parse_info
-        .layers
-        .as_ref()
-        .ok_or_else(|| AsepriteParseError::InvalidInput("No layers found".to_owned()))?;
-
-    // println!("==== Layers ====\n{:#?}", layers);
-    // println!("{:#?}", parse_info.framedata);
-
-    // println!("bytes: {}, size: {}x{}", size, width, height);
-    // println!("color_depth: {}, num_colors: {}", color_depth, num_colors);
-
-    //println!("framedata: {:#?}", parse_info.framedata);
-    match pixel_format {
-        PixelFormat::Rgba => {}
-        PixelFormat::Grayscale => {}
-        PixelFormat::Indexed {
-            transparent_color_index,
-        } => {
-            if let Some(ref palette) = parse_info.palette {
-                parse_info
-                    .framedata
-                    .resolve_palette(palette, transparent_color_index, &layers)?;
-            } else {
-                return Err(AsepriteParseError::InvalidInput(
-                    "Input file uses indexed color mode but does not contain a palette".into(),
-                ));
-            }
-        }
     }
 
     let ValidatedParseInfo {

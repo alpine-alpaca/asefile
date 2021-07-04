@@ -1,3 +1,5 @@
+use image::Pixel;
+
 use crate::{reader::AseReader, AsepriteParseError, ColorPalette, PixelFormat, Result};
 use std::io::Read;
 
@@ -28,6 +30,9 @@ impl Rgba {
             alpha,
         })
     }
+    fn as_image_rgba(&self) -> image::Rgba<u8> {
+        image::Rgba::from_channels(self.red, self.green, self.blue, self.alpha)
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -43,13 +48,13 @@ impl Grayscale {
         let alpha = reader.byte()?;
         Ok(Self { value, alpha })
     }
-    pub(crate) fn as_rgba(&self) -> Rgba {
+    pub(crate) fn to_rgba(self) -> Rgba {
         let Self { value, alpha } = self;
         Rgba {
-            red: *value,
-            green: *value,
-            blue: *value,
-            alpha: *alpha,
+            red: value,
+            green: value,
+            blue: value,
+            alpha,
         }
     }
 }
@@ -153,10 +158,30 @@ impl Pixels {
             Pixels::Indexed(v) => v.len(),
         }
     }
+
+    pub(crate) fn clone_as_image_rgba<F>(&self, index_resolver: F) -> Vec<image::Rgba<u8>>
+    where
+        F: Fn(&Indexed) -> Rgba,
+    {
+        match self {
+            Pixels::Rgba(rgba) => rgba
+                .iter()
+                .map(|px| image::Rgba::from_channels(px.red, px.green, px.blue, px.alpha))
+                .collect(),
+            Pixels::Grayscale(grayscale) => grayscale
+                .iter()
+                .map(|gs| gs.to_rgba().as_image_rgba())
+                .collect(),
+            Pixels::Indexed(indexed) => indexed
+                .iter()
+                .map(|idx| index_resolver(idx).as_image_rgba())
+                .collect(),
+        }
+    }
 }
 
 pub(crate) fn resolve_indexed(
-    pixel: &Indexed,
+    pixel: Indexed,
     palette: &ColorPalette,
     transparent_color_index: u8,
     layer_is_background: bool,
@@ -172,14 +197,14 @@ pub(crate) fn resolve_indexed(
         })
 }
 
-pub(crate) fn resolve_indexed_pixels(
-    pixels: &[Indexed],
-    palette: &ColorPalette,
-    transparent_color_index: u8,
-    layer_is_background: bool,
-) -> Result<Vec<Rgba>> {
-    pixels
-        .iter()
-        .map(|px| resolve_indexed(px, palette, transparent_color_index, layer_is_background))
-        .collect()
-}
+// pub(crate) fn resolve_indexed_pixels(
+//     pixels: &[Indexed],
+//     palette: &ColorPalette,
+//     transparent_color_index: u8,
+//     layer_is_background: bool,
+// ) -> Result<Vec<Rgba>> {
+//     pixels
+//         .iter()
+//         .map(|px| resolve_indexed(px, palette, transparent_color_index, layer_is_background))
+//         .collect()
+// }
