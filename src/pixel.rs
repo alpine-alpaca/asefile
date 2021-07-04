@@ -164,10 +164,7 @@ impl Pixels {
         F: Fn(&Indexed) -> Rgba,
     {
         match self {
-            Pixels::Rgba(rgba) => rgba
-                .iter()
-                .map(|px| image::Rgba::from_channels(px.red, px.green, px.blue, px.alpha))
-                .collect(),
+            Pixels::Rgba(rgba) => rgba.iter().map(|px| px.as_image_rgba()).collect(),
             Pixels::Grayscale(grayscale) => grayscale
                 .iter()
                 .map(|gs| gs.to_rgba().as_image_rgba())
