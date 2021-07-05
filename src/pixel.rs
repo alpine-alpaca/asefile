@@ -176,32 +176,3 @@ impl Pixels {
         }
     }
 }
-
-pub(crate) fn resolve_indexed(
-    pixel: Indexed,
-    palette: &ColorPalette,
-    transparent_color_index: u8,
-    layer_is_background: bool,
-) -> Result<Rgba> {
-    pixel
-        .as_rgba(palette, transparent_color_index, layer_is_background)
-        .ok_or_else(|| {
-            AsepriteParseError::InvalidInput(format!(
-                "Index out of range: {} (max: {})",
-                pixel.value(),
-                palette.num_colors()
-            ))
-        })
-}
-
-// pub(crate) fn resolve_indexed_pixels(
-//     pixels: &[Indexed],
-//     palette: &ColorPalette,
-//     transparent_color_index: u8,
-//     layer_is_background: bool,
-// ) -> Result<Vec<Rgba>> {
-//     pixels
-//         .iter()
-//         .map(|px| resolve_indexed(px, palette, transparent_color_index, layer_is_background))
-//         .collect()
-// }

@@ -221,17 +221,9 @@ impl AsepriteFile {
     /// The image has width equal to the tile width and height equal to (tile_height * tile_count).
     pub fn tileset_image(&self, tileset_id: &TilesetId) -> Option<RgbaImage> {
         let tileset = self.tilesets.get(tileset_id)?;
-        let palette = self.palette.as_ref();
-        let layer_is_background = false;
-        let transparent_color_index = self.pixel_format.transparent_color_index();
-        let index_resolver = |indexed_pixel: &pixel::Indexed| {
-            let palette = palette.expect("Expected a palette present when resolving indexed image. Should have been caught by TilesetsById::validate()");
-            let transparent_color_index = transparent_color_index.expect("Indexed tilemap pixels in non-indexed pixel format. Should have been caught by TilesetsById::validate()");
-            crate::pixel::resolve_indexed(*indexed_pixel, &palette, transparent_color_index, layer_is_background).expect("Failed to resolve indexed pixels. Shoul have been caught by TilesetsById::validate()")
-        };
         let pixels = tileset.pixels.as_ref()?;
 
-        let image_pixels = pixels.clone_as_image_rgba(index_resolver);
+        let image_pixels = pixels.clone_as_image_rgba(|px| self.resolve_indexed_pixel(false, px));
         Some(tileset.image(image_pixels))
     }
 
@@ -259,18 +251,25 @@ impl AsepriteFile {
         image
     }
 
+    fn resolve_indexed_pixel(
+        &self,
+        layer_is_background: bool,
+        pixel: &pixel::Indexed,
+    ) -> pixel::Rgba {
+        let palette = self.palette.as_ref().expect("Expected a palette present when resolving indexed image. Should have been caught in validation");
+        let transparent_color_index = self.pixel_format.transparent_color_index().expect("Indexed tilemap pixels in non-indexed pixel format. Should have been caught in validation");
+        pixel
+            .as_rgba(palette, transparent_color_index, layer_is_background)
+            .expect("Indexed pixel out of range. Should have been caught in validation")
+    }
+
     fn write_cel(&self, image: &mut RgbaImage, cel: &RawCel) {
         let RawCel { data, content } = cel;
         let layer = self.layer(data.layer_index as u32);
         let blend_mode = layer.blend_mode();
-        let palette = self.palette.as_ref();
         let layer_is_background = self.layers[layer.id()].is_background();
-        let transparent_color_index = self.pixel_format.transparent_color_index();
-        let index_resolver = |indexed_pixel: &pixel::Indexed| {
-            let palette = palette.expect("Expected a palette present when resolving indexed image. Should have been caught by TilesetsById::validate()");
-            let transparent_color_index = transparent_color_index.expect("Indexed tilemap pixels in non-indexed pixel format. Should have been caught by TilesetsById::validate()");
-            crate::pixel::resolve_indexed(*indexed_pixel, &palette, transparent_color_index, layer_is_background).expect("Failed to resolve indexed pixels. Shoul have been caught by TilesetsById::validate()")
-        };
+        let index_resolver =
+            |px: &pixel::Indexed| self.resolve_indexed_pixel(layer_is_background, px);
         match &content {
             CelContent::Raw(image_content) => {
                 let ImageContent { size, pixels } = image_content;
