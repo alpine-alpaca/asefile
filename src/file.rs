@@ -274,11 +274,11 @@ impl AsepriteFile {
             CelContent::Raw(image_content) => {
                 let ImageContent { size, pixels } = image_content;
                 let image_pixels = pixels.clone_as_image_rgba(index_resolver);
+
                 write_raw_cel_to_image(image, data, size, image_pixels, &blend_mode);
             }
             CelContent::Tilemap(tilemap_data) => {
                 let layer_type = layer.layer_type();
-
                 let tileset_id = if let LayerType::Tilemap(tileset_id) = layer_type {
                     tileset_id
                 } else {
@@ -294,7 +294,6 @@ impl AsepriteFile {
                     .pixels
                     .as_ref()
                     .expect("Expected Tileset data to contain pixels. Should have been caught by TilesetsById::validate()");
-
                 let rgba_pixels = tileset_pixels.clone_as_image_rgba(index_resolver);
 
                 write_tilemap_cel_to_image(
