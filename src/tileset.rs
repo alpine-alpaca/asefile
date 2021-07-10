@@ -1,8 +1,8 @@
-use std::{collections::HashMap, io::Read};
+use std::{collections::HashMap, fmt, io::Read};
 
 use crate::{pixel::Pixels, AsepriteParseError, ColorPalette, PixelFormat, Result};
 use bitflags::bitflags;
-use image::RgbaImage;
+use image::{Rgba, RgbaImage};
 
 use crate::{external_file::ExternalFileId, reader::AseReader};
 
@@ -18,6 +18,11 @@ impl TilesetId {
     /// Get a reference to the underlying u32 value.
     pub fn value(&self) -> &u32 {
         &self.0
+    }
+}
+impl fmt::Display for TilesetId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "TilesetId({})", self.0)
     }
 }
 
@@ -137,7 +142,7 @@ impl Tileset {
         self.external_file.as_ref()
     }
 
-    pub(crate) fn image(&self, image_pixels: Vec<image::Rgba<u8>>) -> RgbaImage {
+    pub(crate) fn write_to_image(&self, image_pixels: &[Rgba<u8>]) -> RgbaImage {
         let Tileset {
             tile_size,
             tile_count,
@@ -271,5 +276,24 @@ impl TilesetsById {
             }
         }
         Ok(())
+    }
+}
+
+/// An error occured while generating a tileset image.
+#[derive(Debug)]
+pub enum TilesetImageError {
+    MissingTilesetId(TilesetId),
+    NoPixelsInTileset(TilesetId),
+}
+impl fmt::Display for TilesetImageError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TilesetImageError::MissingTilesetId(tileset_id) => {
+                write!(f, "No tileset found with id: {}", tileset_id)
+            }
+            TilesetImageError::NoPixelsInTileset(tileset_id) => {
+                write!(f, "No pixel data for tileset with id: {}", tileset_id)
+            }
+        }
     }
 }

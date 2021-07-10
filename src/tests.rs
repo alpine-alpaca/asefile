@@ -379,11 +379,11 @@ fn tilemap_grayscale() {
 #[test]
 fn tileset_export() {
     let f = load_test_file("tileset");
-    let img = f
+    let tileset = f
         .tilesets()
         .get(&tileset::TilesetId::new(0))
-        .and_then(|ts| f.tileset_image(ts.id()))
         .expect("No tileset found");
+    let img = f.tileset_image(tileset.id()).unwrap();
 
     compare_with_reference_image(img, "tileset");
 }

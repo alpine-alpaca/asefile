@@ -11,11 +11,11 @@ use crate::{
     layer::{Layer, LayerType, LayersData},
     tile::TileId,
     tilemap::Tilemap,
-    tileset::{TileSize, Tileset, TilesetsById},
+    tileset::{TileSize, Tileset, TilesetImageError, TilesetsById},
 };
 use crate::{cel::Cel, *};
 use cel::{CelContent, RawCel};
-use image::RgbaImage;
+use image::{Rgba, RgbaImage};
 
 /// A parsed Aseprite file.
 #[derive(Debug)]
@@ -219,12 +219,26 @@ impl AsepriteFile {
 
     /// Construct the image of each tile in the [Tileset].
     /// The image has width equal to the tile width and height equal to (tile_height * tile_count).
-    pub fn tileset_image(&self, tileset_id: &TilesetId) -> Option<RgbaImage> {
-        let tileset = self.tilesets.get(tileset_id)?;
-        let pixels = tileset.pixels.as_ref()?;
+    pub fn tileset_image(
+        &self,
+        tileset_id: &TilesetId,
+    ) -> std::result::Result<RgbaImage, TilesetImageError> {
+        let tileset = self
+            .tilesets
+            .get(tileset_id)
+            .ok_or_else(|| TilesetImageError::MissingTilesetId(*tileset_id))?;
+        let pixels = tileset
+            .pixels
+            .as_ref()
+            .ok_or_else(|| TilesetImageError::NoPixelsInTileset(*tileset_id))?;
+        let resolver_data = pixel::IndexResolverData {
+            palette: self.palette.as_ref(),
+            transparent_color_index: self.pixel_format.transparent_color_index(),
+            layer_is_background: false,
+        };
+        let image_pixels = pixels.clone_as_image_rgba(resolver_data);
 
-        let image_pixels = pixels.clone_as_image_rgba(|px| self.resolve_indexed_pixel(false, px));
-        Some(tileset.image(image_pixels))
+        Ok(tileset.write_to_image(image_pixels.as_ref()))
     }
 
     // pub fn color_profile(&self) -> Option<&ColorProfile> {
@@ -251,31 +265,21 @@ impl AsepriteFile {
         image
     }
 
-    fn resolve_indexed_pixel(
-        &self,
-        layer_is_background: bool,
-        pixel: &pixel::Indexed,
-    ) -> pixel::Rgba {
-        let palette = self.palette.as_ref().expect("Expected a palette present when resolving indexed image. Should have been caught in validation");
-        let transparent_color_index = self.pixel_format.transparent_color_index().expect("Indexed tilemap pixels in non-indexed pixel format. Should have been caught in validation");
-        pixel
-            .as_rgba(palette, transparent_color_index, layer_is_background)
-            .expect("Indexed pixel out of range. Should have been caught in validation")
-    }
-
     fn write_cel(&self, image: &mut RgbaImage, cel: &RawCel) {
         let RawCel { data, content } = cel;
         let layer = self.layer(data.layer_index as u32);
         let blend_mode = layer.blend_mode();
-        let layer_is_background = self.layers[layer.id()].is_background();
-        let index_resolver =
-            |px: &pixel::Indexed| self.resolve_indexed_pixel(layer_is_background, px);
+        let resolver_data = pixel::IndexResolverData {
+            palette: self.palette.as_ref(),
+            transparent_color_index: self.pixel_format.transparent_color_index(),
+            layer_is_background: self.layers[layer.id()].is_background(),
+        };
         match &content {
             CelContent::Raw(image_content) => {
                 let ImageContent { size, pixels } = image_content;
-                let image_pixels = pixels.clone_as_image_rgba(index_resolver);
+                let image_pixels = pixels.clone_as_image_rgba(resolver_data);
 
-                write_raw_cel_to_image(image, data, size, image_pixels, &blend_mode);
+                write_raw_cel_to_image(image, data, size, image_pixels.as_ref(), &blend_mode);
             }
             CelContent::Tilemap(tilemap_data) => {
                 let layer_type = layer.layer_type();
@@ -294,14 +298,14 @@ impl AsepriteFile {
                     .pixels
                     .as_ref()
                     .expect("Expected Tileset data to contain pixels. Should have been caught by TilesetsById::validate()");
-                let rgba_pixels = tileset_pixels.clone_as_image_rgba(index_resolver);
+                let rgba_pixels = tileset_pixels.clone_as_image_rgba(resolver_data);
 
                 write_tilemap_cel_to_image(
                     image,
                     data,
                     tilemap_data,
                     tileset,
-                    rgba_pixels,
+                    rgba_pixels.as_ref(),
                     &blend_mode,
                 );
             }
@@ -421,7 +425,7 @@ fn write_tilemap_cel_to_image(
     cel_data: &CelData,
     tilemap_data: &Tilemap,
     tileset: &Tileset,
-    pixels: Vec<image::Rgba<u8>>,
+    pixels: &[Rgba<u8>],
     blend_mode: &BlendMode,
 ) {
     let CelData { x, y, opacity, .. } = cel_data;
@@ -464,7 +468,7 @@ fn write_raw_cel_to_image(
     image: &mut RgbaImage,
     cel_data: &CelData,
     image_size: &ImageSize,
-    pixels: Vec<image::Rgba<u8>>,
+    pixels: &[Rgba<u8>],
     blend_mode: &BlendMode,
 ) {
     let ImageSize { width, height } = image_size;
