@@ -1,4 +1,4 @@
-use crate::{reader::AseReader, AsepriteParseError, Result};
+use crate::{parse::ChunkContent, reader::AseReader, AsepriteParseError, Result};
 
 /// A tag is a grouping of one or more frames.
 ///
@@ -45,7 +45,8 @@ pub enum AnimationDirection {
     PingPong,
 }
 
-pub(crate) fn parse_tags_chunk(data: &[u8]) -> Result<Vec<Tag>> {
+pub(crate) fn parse_chunk(chunk: ChunkContent) -> Result<Vec<Tag>> {
+    let data = &chunk.data;
     let mut reader = AseReader::new(data);
 
     let num_tags = reader.word()?;

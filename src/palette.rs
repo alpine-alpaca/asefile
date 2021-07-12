@@ -1,4 +1,4 @@
-use crate::{reader::AseReader, AsepriteParseError, Result};
+use crate::{parse::ChunkContent, reader::AseReader, AsepriteParseError, Result};
 use nohash::IntMap;
 
 /// The color palette embedded in the file.
@@ -70,7 +70,8 @@ impl ColorPaletteEntry {
     }
 }
 
-pub(crate) fn parse_palette_chunk(data: &[u8]) -> Result<ColorPalette> {
+pub(crate) fn parse_chunk(chunk: ChunkContent) -> Result<ColorPalette> {
+    let data = &chunk.data;
     let mut reader = AseReader::new(data);
 
     let _num_total_entries = reader.dword()?;

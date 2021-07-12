@@ -1,3 +1,4 @@
+use crate::parse::ChunkContent;
 use crate::{external_file::ExternalFileId, reader::AseReader};
 use crate::{pixel::Pixels, AsepriteParseError, ColorPalette, PixelFormat, Result};
 use bitflags::bitflags;
@@ -134,7 +135,8 @@ impl Tileset {
         self.external_file.as_ref()
     }
 
-    pub(crate) fn parse_chunk(data: &[u8], pixel_format: PixelFormat) -> Result<Tileset> {
+    pub(crate) fn parse_chunk(chunk: ChunkContent, pixel_format: PixelFormat) -> Result<Tileset> {
+        let data = &chunk.data;
         let mut reader = AseReader::new(data);
         let id = reader.dword().map(TilesetId)?;
         let flags = reader.dword().map(|val| TilesetFlags { bits: val })?;

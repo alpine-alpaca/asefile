@@ -1,4 +1,4 @@
-use crate::{reader::AseReader, Result};
+use crate::{parse::ChunkContent, reader::AseReader, Result};
 
 #[derive(Debug)]
 pub struct Slice {
@@ -15,7 +15,8 @@ pub struct SliceKey {
     pub pivot: Option<(i32, i32)>,
 }
 
-pub(crate) fn parse_slice_chunk(data: &[u8]) -> Result<Slice> {
+pub(crate) fn parse_chunk(chunk: ChunkContent) -> Result<Slice> {
+    let data = &chunk.data;
     let mut reader = AseReader::new(data);
 
     let num_slice_keys = reader.dword()?;

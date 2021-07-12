@@ -1,4 +1,5 @@
 use crate::layer::{LayerData, LayerType};
+use crate::parse::ChunkContent;
 use crate::pixel::{self, Pixels};
 use crate::reader::AseReader;
 use crate::tilemap::Tilemap;
@@ -334,7 +335,8 @@ fn parse_compressed_cel<R: Read>(
         .map(|pixels| ImageContent { size, pixels })
 }
 
-pub(crate) fn parse_cel_chunk(data: &[u8], pixel_format: PixelFormat) -> Result<RawCel> {
+pub(crate) fn parse_chunk(chunk: ChunkContent, pixel_format: PixelFormat) -> Result<RawCel> {
+    let data = &chunk.data;
     let mut reader = AseReader::new(data);
     let data = CelData::parse(&mut reader)?;
     let cel_type = reader.word()?;

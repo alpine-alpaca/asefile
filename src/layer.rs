@@ -1,5 +1,6 @@
 use crate::{
     cel::Cel,
+    parse::ChunkContent,
     reader::AseReader,
     tileset::{TilesetId, TilesetsById},
     AsepriteFile, AsepriteParseError, Result,
@@ -198,7 +199,8 @@ pub enum BlendMode {
     Divide,
 }
 
-pub(crate) fn parse_layer_chunk(data: &[u8]) -> Result<LayerData> {
+pub(crate) fn parse_chunk(chunk: ChunkContent) -> Result<LayerData> {
+    let data = &chunk.data;
     let mut reader = AseReader::new(data);
 
     let flags = reader.word()?;

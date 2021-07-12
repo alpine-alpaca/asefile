@@ -1,8 +1,9 @@
 use crate::external_file::{ExternalFile, ExternalFilesById};
 use crate::reader::AseReader;
 use crate::tileset::{Tileset, TilesetsById};
+use crate::user_data::UserData;
 use crate::{error::AsepriteParseError, AsepriteFile, PixelFormat};
-use log::debug;
+use log::{debug, warn};
 use std::io::Read;
 
 use crate::Result;
@@ -208,34 +209,38 @@ fn parse_frame<R: Read>(
     };
 
     let mut found_layers: Vec<layer::LayerData> = Vec::new();
+    let bytes_available = num_bytes as i64 - FRAME_HEADER_SIZE;
 
-    let mut bytes_available = num_bytes as i64 - FRAME_HEADER_SIZE;
-    for _chunk in 0..num_chunks {
-        let chunk = Chunk::parse(&mut bytes_available, reader)?;
+    let chunks = Chunk::read_all(num_chunks, bytes_available, reader)?;
 
-        match chunk.chunk_type {
+    for chunk in chunks {
+        let Chunk {
+            chunk_type,
+            content,
+        } = chunk;
+        match chunk_type {
             ChunkType::ColorProfile => {
-                let profile = color_profile::parse_color_profile(&chunk.data)?;
+                let profile = color_profile::parse_chunk(content)?;
                 parse_info.color_profile = Some(profile);
             }
             ChunkType::Palette => {
-                let palette = palette::parse_palette_chunk(&chunk.data)?;
+                let palette = palette::parse_chunk(content)?;
                 parse_info.palette = Some(palette);
             }
             ChunkType::Layer => {
-                let layer = layer::parse_layer_chunk(&chunk.data)?;
+                let layer = layer::parse_chunk(content)?;
                 found_layers.push(layer);
             }
             ChunkType::Cel => {
-                let cel = cel::parse_cel_chunk(&chunk.data, pixel_format)?;
+                let cel = cel::parse_chunk(content, pixel_format)?;
                 parse_info.add_cel(frame_id, cel)?;
             }
             ChunkType::ExternalFiles => {
-                let files = ExternalFile::parse_chunk(&chunk.data)?;
+                let files = ExternalFile::parse_chunk(content)?;
                 parse_info.add_external_files(files);
             }
             ChunkType::Tags => {
-                let tags = tags::parse_tags_chunk(&chunk.data)?;
+                let tags = tags::parse_chunk(content)?;
                 if frame_id == 0 {
                     parse_info.tags = Some(tags);
                 } else {
@@ -243,22 +248,22 @@ fn parse_frame<R: Read>(
                 }
             }
             ChunkType::Slice => {
-                let _slice = slice::parse_slice_chunk(&chunk.data)?;
+                let _slice = slice::parse_chunk(content)?;
                 //println!("Slice: {:#?}", slice);
             }
             ChunkType::UserData => {
-                let _ud = user_data::parse_userdata_chunk(&chunk.data)?;
+                warn!("Found dangling user data chunk. Should have been previously attached to another chunk in Chunk::parse_all");
                 //println!("Userdata: {:#?}", ud);
             }
             ChunkType::OldPalette04 | ChunkType::OldPalette11 => {
                 // ignore old palette chunks
             }
             ChunkType::Tileset => {
-                let tileset = Tileset::parse_chunk(&chunk.data, pixel_format)?;
+                let tileset = Tileset::parse_chunk(content, pixel_format)?;
                 parse_info.tilesets.add(tileset);
             }
             ChunkType::CelExtra | ChunkType::Mask | ChunkType::Path => {
-                debug!("Ignoring unsupported chunk type: {:?}", chunk.chunk_type);
+                debug!("Ignoring unsupported chunk type: {:?}", chunk_type);
             }
         }
     }
@@ -316,12 +321,16 @@ const CHUNK_HEADER_SIZE: usize = 6;
 const FRAME_HEADER_SIZE: i64 = 16;
 
 struct Chunk {
-    data: Vec<u8>,
     chunk_type: ChunkType,
+    content: ChunkContent,
+}
+pub(crate) struct ChunkContent {
+    pub data: Vec<u8>,
+    pub user_data: Option<UserData>,
 }
 
 impl Chunk {
-    fn parse<R: Read>(bytes_available: &mut i64, reader: &mut AseReader<R>) -> Result<Self> {
+    fn read<R: Read>(bytes_available: &mut i64, reader: &mut AseReader<R>) -> Result<Self> {
         let chunk_size = reader.dword()?;
         let chunk_type_code = reader.word()?;
         let chunk_type = parse_chunk_type(chunk_type_code)?;
@@ -332,7 +341,36 @@ impl Chunk {
         let mut data = vec![0_u8; chunk_data_bytes];
         reader.read_exact(&mut data)?;
         *bytes_available -= chunk_size as i64;
-        Ok(Chunk { data, chunk_type })
+        Ok(Chunk {
+            chunk_type,
+            content: ChunkContent {
+                data,
+                user_data: None,
+            },
+        })
+    }
+    fn read_all<R: Read>(
+        count: u32,
+        mut bytes_available: i64,
+        reader: &mut AseReader<R>,
+    ) -> Result<Vec<Self>> {
+        let mut chunks: Vec<Chunk> = Vec::new();
+        for _idx in 0..count {
+            let chunk = Self::read(&mut bytes_available, reader)?;
+            // Attach any user data chunks to the previously read chunk. Otherwise, push chunk to Vec and continue.
+            if let ChunkType::UserData = chunk.chunk_type {
+                let previous_chunk = chunks.last_mut().ok_or_else(|| {
+                    AsepriteParseError::InvalidInput(
+                        "Found user data chunk with no previous chunk".into(),
+                    )
+                })?;
+                let user_data = user_data::parse_userdata_chunk(&chunk.content.data)?;
+                previous_chunk.content.user_data = Some(user_data);
+            } else {
+                chunks.push(chunk);
+            }
+        }
+        Ok(chunks)
     }
 }
 
