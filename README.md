@@ -41,9 +41,7 @@ fn main() {
 
 The following features of Aseprite 1.2.25 are currently not supported:
 
-- grayscale images
 - color profiles
-
 
 # Bug compatibility
 
