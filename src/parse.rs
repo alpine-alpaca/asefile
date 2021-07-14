@@ -2,6 +2,7 @@ use crate::cel::CelId;
 use crate::external_file::{ExternalFile, ExternalFilesById};
 use crate::layer::{LayerData, LayersData};
 use crate::reader::AseReader;
+use crate::slice::Slice;
 use crate::tileset::{Tileset, TilesetsById};
 use crate::user_data::UserData;
 use crate::{error::AsepriteParseError, AsepriteFile, PixelFormat};
@@ -60,9 +61,25 @@ struct ParseInfo {
     tilesets: TilesetsById,
     sprite_user_data: Option<UserData>,
     user_data_context: Option<UserDataContext>,
+    slices: Vec<Slice>,
 }
 
 impl ParseInfo {
+    fn new(num_frames: u16, default_frame_time: u16) -> Self {
+        Self {
+            palette: None,
+            color_profile: None,
+            layers: LayerParseInfo::new(),
+            framedata: cel::CelsData::new(num_frames as u32),
+            frame_times: vec![default_frame_time; num_frames as usize],
+            tags: None,
+            external_files: ExternalFilesById::new(),
+            tilesets: TilesetsById::new(),
+            sprite_user_data: None,
+            user_data_context: None,
+            slices: Vec::new(),
+        }
+    }
     fn add_cel(&mut self, frame_id: u16, cel: cel::RawCel) -> Result<()> {
         let cel_id = CelId {
             frame: frame_id,
@@ -136,8 +153,22 @@ impl ParseInfo {
             UserDataContext::TagIndex(tag_index) => {
                 self.set_tag_user_data(user_data, tag_index)?;
             }
+            UserDataContext::SliceIndex(slice_idx) => {
+                let slice = self.slices.get_mut(slice_idx as usize).ok_or_else(|| {
+                    AsepriteParseError::InternalError(format!(
+                        "Invalid slice index stored in chunk context: {}",
+                        slice_idx
+                    ))
+                })?;
+                slice.user_data = Some(user_data);
+            }
         }
         Ok(())
+    }
+    fn add_slice(&mut self, slice: Slice) {
+        let context_idx = self.slices.len();
+        self.slices.push(slice);
+        self.user_data_context = Some(UserDataContext::SliceIndex(context_idx as u32));
     }
     fn finalize_layers(&mut self) -> Result<()> {
         // Move the layers vec out to collect
@@ -223,20 +254,7 @@ pub fn read_aseprite<R: Read>(input: R) -> Result<AsepriteFile> {
         ));
     }
 
-    let framedata = cel::CelsData::new(num_frames as u32);
-
-    let mut parse_info = ParseInfo {
-        palette: None,
-        color_profile: None,
-        layers: LayerParseInfo::new(),
-        framedata,
-        frame_times: vec![default_frame_time; num_frames as usize],
-        tags: None,
-        external_files: ExternalFilesById::new(),
-        tilesets: TilesetsById::new(),
-        sprite_user_data: None,
-        user_data_context: None,
-    };
+    let mut parse_info = ParseInfo::new(num_frames, default_frame_time);
 
     let pixel_format = parse_pixel_format(color_depth, transparent_color_index)?;
 
@@ -365,7 +383,8 @@ fn parse_frame<R: Read>(
                 }
             }
             ChunkType::Slice => {
-                let _slice = slice::parse_chunk(&data)?;
+                let slice = slice::parse_chunk(&data)?;
+                parse_info.add_slice(slice);
                 //println!("Slice: {:#?}", slice);
             }
             ChunkType::UserData => {
@@ -403,6 +422,7 @@ enum UserDataContext {
     LayerIndex(u32),
     OldPalette,
     TagIndex(u16),
+    SliceIndex(u32),
 }
 
 #[derive(Debug, Clone, PartialEq)]

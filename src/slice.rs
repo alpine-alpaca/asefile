@@ -1,9 +1,10 @@
-use crate::{reader::AseReader, Result};
+use crate::{reader::AseReader, user_data::UserData, Result};
 
 #[derive(Debug)]
 pub struct Slice {
     pub name: String,
     pub keys: Vec<SliceKey>,
+    pub user_data: Option<UserData>,
 }
 
 #[derive(Debug)]
@@ -59,5 +60,6 @@ pub(crate) fn parse_chunk(data: &[u8]) -> Result<Slice> {
     Ok(Slice {
         name,
         keys: slice_keys,
+        user_data: None,
     })
 }
