@@ -59,7 +59,7 @@ struct ParseInfo {
     external_files: ExternalFilesById,
     tilesets: TilesetsById,
     sprite_user_data: Option<UserData>,
-    chunk_context: Option<ChunkContext>,
+    user_data_context: Option<UserDataContext>,
 }
 
 impl ParseInfo {
@@ -69,19 +69,19 @@ impl ParseInfo {
             layer: cel.data.layer_index,
         };
         self.framedata.add_cel(frame_id, cel)?;
-        self.chunk_context = Some(ChunkContext::CelId(cel_id));
+        self.user_data_context = Some(UserDataContext::CelId(cel_id));
         Ok(())
     }
     fn add_layer(&mut self, layer_data: LayerData) {
         if let LayerParseInfo::InProgress(layers) = &mut self.layers {
             let idx = layers.len();
             layers.push(layer_data);
-            self.chunk_context = Some(ChunkContext::LayerIndex(idx as u32));
+            self.user_data_context = Some(UserDataContext::LayerIndex(idx as u32));
         }
     }
     fn add_tags(&mut self, tags: Vec<Tag>) {
         self.tags = Some(tags);
-        self.chunk_context = Some(ChunkContext::TagIndex(0));
+        self.user_data_context = Some(UserDataContext::TagIndex(0));
     }
     fn add_external_files(&mut self, files: Vec<ExternalFile>) {
         for external_file in files {
@@ -101,18 +101,18 @@ impl ParseInfo {
             ))
         })?;
         tag.set_user_data(user_data);
-        self.chunk_context = Some(ChunkContext::TagIndex(tag_index + 1));
+        self.user_data_context = Some(UserDataContext::TagIndex(tag_index + 1));
         Ok(())
     }
     fn add_user_data(&mut self, user_data: UserData) -> Result<()> {
-        let chunk_context = self.chunk_context.ok_or_else(|| {
+        let user_data_context = self.user_data_context.ok_or_else(|| {
             AsepriteParseError::InvalidInput(
                 "Found dangling user data chunk. Expected a previous chunk to attach user data"
                     .into(),
             )
         })?;
-        match chunk_context {
-            ChunkContext::CelId(cel_id) => {
+        match user_data_context {
+            UserDataContext::CelId(cel_id) => {
                 let cel = self.framedata.cel_mut(&cel_id).ok_or_else(|| {
                     AsepriteParseError::InternalError(format!(
                         "Invalid cel id stored in chunk context: {}",
@@ -121,7 +121,7 @@ impl ParseInfo {
                 })?;
                 cel.user_data = Some(user_data);
             }
-            ChunkContext::LayerIndex(layer_index) => {
+            UserDataContext::LayerIndex(layer_index) => {
                 let layer = self.layers.layer_mut(layer_index).ok_or_else(|| {
                     AsepriteParseError::InternalError(format!(
                         "Invalid layer id stored in chunk context: {}",
@@ -130,10 +130,10 @@ impl ParseInfo {
                 })?;
                 layer.user_data = Some(user_data);
             }
-            ChunkContext::OldPalette => {
+            UserDataContext::OldPalette => {
                 self.sprite_user_data = Some(user_data);
             }
-            ChunkContext::TagIndex(tag_index) => {
+            UserDataContext::TagIndex(tag_index) => {
                 self.set_tag_user_data(user_data, tag_index)?;
             }
         }
@@ -235,7 +235,7 @@ pub fn read_aseprite<R: Read>(input: R) -> Result<AsepriteFile> {
         external_files: ExternalFilesById::new(),
         tilesets: TilesetsById::new(),
         sprite_user_data: None,
-        chunk_context: None,
+        user_data_context: None,
     };
 
     let pixel_format = parse_pixel_format(color_depth, transparent_color_index)?;
@@ -376,7 +376,7 @@ fn parse_frame<R: Read>(
             ChunkType::OldPalette04 | ChunkType::OldPalette11 => {
                 // An old palette chunk precedes the sprite UserData chunk.
                 // Update the chunk context to reflect the OldPalette chunk.
-                parse_info.chunk_context = Some(ChunkContext::OldPalette);
+                parse_info.user_data_context = Some(UserDataContext::OldPalette);
 
                 // parse_info.sprite_user_data = &data.user_data;
             }
@@ -398,7 +398,7 @@ fn parse_frame<R: Read>(
 }
 
 #[derive(Clone, Copy)]
-enum ChunkContext {
+enum UserDataContext {
     CelId(CelId),
     LayerIndex(u32),
     OldPalette,
