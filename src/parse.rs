@@ -200,6 +200,7 @@ impl ParseInfo {
             tags: self.tags.unwrap_or_default(),
             frame_times: self.frame_times,
             sprite_user_data: self.sprite_user_data,
+            slices: self.slices,
         })
     }
 }
@@ -213,6 +214,7 @@ struct ValidatedParseInfo {
     tags: Vec<Tag>,
     frame_times: Vec<u16>,
     sprite_user_data: Option<UserData>,
+    slices: Vec<Slice>,
 }
 
 // file format docs: https://github.com/aseprite/aseprite/blob/master/docs/ase-file-specs.md
@@ -302,6 +304,7 @@ pub fn read_aseprite<R: Read>(input: R) -> Result<AsepriteFile> {
         tags,
         frame_times,
         sprite_user_data,
+        slices,
     } = parse_info.validate(&pixel_format)?;
 
     Ok(AsepriteFile {
@@ -317,6 +320,7 @@ pub fn read_aseprite<R: Read>(input: R) -> Result<AsepriteFile> {
         external_files,
         tilesets,
         sprite_user_data,
+        slices,
     })
 }
 

@@ -10,6 +10,7 @@ use crate::{
     external_file::{ExternalFile, ExternalFileId, ExternalFilesById},
     layer::{Layer, LayerType, LayersData},
     pixel::Grayscale,
+    slice::Slice,
     tile::TileId,
     tilemap::Tilemap,
     tileset::{TileSize, Tileset, TilesetsById},
@@ -35,6 +36,7 @@ pub struct AsepriteFile {
     pub(crate) external_files: ExternalFilesById,
     pub(crate) tilesets: TilesetsById,
     pub(crate) sprite_user_data: Option<UserData>,
+    pub(crate) slices: Vec<Slice>,
 }
 
 /// A reference to a single frame.
@@ -206,7 +208,7 @@ impl AsepriteFile {
         None
     }
 
-    /// Access the file's Tilesets.
+    /// Access the file's [Tileset]s.
     pub fn tilesets(&self) -> &TilesetsById {
         &self.tilesets
     }
@@ -214,6 +216,11 @@ impl AsepriteFile {
     /// Access the user data for the entire sprite, if any exists.
     pub fn sprite_user_data(&self) -> Option<&UserData> {
         self.sprite_user_data.as_ref()
+    }
+
+    /// Access the file's [Slice]s.
+    pub fn slices(&self) -> &Vec<Slice> {
+        &self.slices
     }
 
     // pub fn color_profile(&self) -> Option<&ColorProfile> {

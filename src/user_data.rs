@@ -1,8 +1,11 @@
 use crate::{reader::AseReader, Result};
 
+/// UserData contains user-provided metadata which describes some other data in the sprite.
 #[derive(Debug, Clone)]
 pub struct UserData {
+    /// User-provided string data.
     pub text: Option<String>,
+    /// User-provided color in bytes [red, green, blue, alpha].
     pub color: Option<[u8; 4]>,
 }
 
