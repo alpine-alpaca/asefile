@@ -1,6 +1,6 @@
 use crate::{reader::AseReader, Result};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct UserData {
     pub text: Option<String>,
     pub color: Option<[u8; 4]>,

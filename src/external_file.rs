@@ -1,4 +1,3 @@
-use crate::parse::ChunkContent;
 use crate::reader::AseReader;
 use crate::Result;
 use core::str;
@@ -42,8 +41,7 @@ impl ExternalFile {
         &self.name
     }
 
-    pub(crate) fn parse_chunk(chunk: ChunkContent) -> Result<Vec<Self>> {
-        let data = &chunk.data;
+    pub(crate) fn parse_chunk(data: &[u8]) -> Result<Vec<Self>> {
         let mut reader = AseReader::new(data);
         let entry_ct = reader.dword()?;
         reader.skip_reserved(8)?;

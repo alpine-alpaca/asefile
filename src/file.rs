@@ -6,13 +6,14 @@ use std::{
 
 use crate::{
     blend::{self, Color8},
-    cel::{CelData, CelsData, ImageContent, ImageSize},
+    cel::{CelData, CelId, CelsData, ImageContent, ImageSize},
     external_file::{ExternalFile, ExternalFileId, ExternalFilesById},
     layer::{Layer, LayerType, LayersData},
     pixel::Grayscale,
     tile::TileId,
     tilemap::Tilemap,
     tileset::{TileSize, Tileset, TilesetsById},
+    user_data::UserData,
 };
 use crate::{cel::Cel, *};
 use cel::{CelContent, RawCel};
@@ -33,6 +34,7 @@ pub struct AsepriteFile {
     pub(crate) framedata: CelsData, // Vec<Vec<cel::RawCel>>,
     pub(crate) external_files: ExternalFilesById,
     pub(crate) tilesets: TilesetsById,
+    pub(crate) sprite_user_data: Option<UserData>,
 }
 
 /// A reference to a single frame.
@@ -209,6 +211,11 @@ impl AsepriteFile {
         &self.tilesets
     }
 
+    /// Access the user data for the entire sprite, if any exists.
+    pub fn sprite_user_data(&self) -> Option<&UserData> {
+        self.sprite_user_data.as_ref()
+    }
+
     // pub fn color_profile(&self) -> Option<&ColorProfile> {
     //     self.color_profile.as_ref()
     // }
@@ -235,7 +242,7 @@ impl AsepriteFile {
 
     fn write_cel(&self, image: &mut RgbaImage, cel: &RawCel) {
         assert!(self.pixel_format != PixelFormat::Grayscale);
-        let RawCel { data, content } = cel;
+        let RawCel { data, content, .. } = cel;
         let layer = self.layer(data.layer_index as u32);
         let blend_mode = layer.blend_mode();
         match &content {
@@ -325,7 +332,10 @@ impl AsepriteFile {
                 };
             }
             CelContent::Linked(frame) => {
-                if let Some(cel) = self.framedata.cel(*frame, data.layer_index) {
+                if let Some(cel) = self.framedata.cel(CelId {
+                    frame: *frame,
+                    layer: data.layer_index,
+                }) {
                     if let CelContent::Linked(_) = cel.content {
                         panic!(
                             "Cel links to empty cel. Should have been caught by CelsData::validate"
@@ -341,7 +351,10 @@ impl AsepriteFile {
 
     pub(crate) fn layer_image(&self, frame: u16, layer_id: usize) -> RgbaImage {
         let mut image = RgbaImage::new(self.width as u32, self.height as u32);
-        if let Some(cel) = self.framedata.cel(frame, layer_id as u16) {
+        if let Some(cel) = self.framedata.cel(CelId {
+            frame,
+            layer: layer_id as u16,
+        }) {
             self.write_cel(&mut image, cel);
         }
         image
@@ -388,10 +401,16 @@ impl<'a> Frame<'a> {
     /// Get cel corresponding to the given layer in this frame.
     pub fn layer(&self, layer_id: u32) -> Cel {
         assert!(layer_id < self.file.num_layers());
+        let raw_cel = self.file.framedata.cel(CelId {
+            frame: self.index as u16,
+            layer: layer_id as u16,
+        });
+        let user_data = raw_cel.and_then(|raw| raw.user_data.as_ref());
         Cel {
             file: self.file,
             layer: layer_id,
             frame: self.index,
+            user_data,
         }
     }
 

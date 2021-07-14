@@ -8,6 +8,8 @@ pub enum AsepriteParseError {
     /// The input data was correct, but uses a feature that is not supported by
     /// this version of `asefile`. String contains detailed message.
     UnsupportedFeature(String),
+    /// An internal error occurred.
+    InternalError(String),
     /// An IO error occured. Also includes errors where the input was shorter
     /// than expected.
     IoError(io::Error),
@@ -31,6 +33,9 @@ impl fmt::Display for AsepriteParseError {
             AsepriteParseError::InvalidInput(msg) => write!(f, "Invalid Aseprite input: {}", msg),
             AsepriteParseError::UnsupportedFeature(msg) => {
                 write!(f, "Unsupported Aseprite feature: {}", msg)
+            }
+            AsepriteParseError::InternalError(msg) => {
+                write!(f, "Internal error: {}", msg)
             }
             AsepriteParseError::IoError(err) => write!(f, "I/O error: {}", err),
         }

@@ -1,4 +1,4 @@
-use crate::{parse::ChunkContent, reader::AseReader, AsepriteParseError, Result};
+use crate::{reader::AseReader, AsepriteParseError, Result};
 
 #[derive(Debug)]
 pub struct ColorProfile {
@@ -14,8 +14,7 @@ pub enum ColorProfileType {
     ICC,
 }
 
-pub(crate) fn parse_chunk(chunk: ChunkContent) -> Result<ColorProfile> {
-    let data = &chunk.data;
+pub(crate) fn parse_chunk(data: &[u8]) -> Result<ColorProfile> {
     let mut reader = AseReader::new(data);
     let profile_type = reader.word()?;
     let flags = reader.word()?;

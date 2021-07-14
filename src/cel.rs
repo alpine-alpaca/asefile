@@ -1,8 +1,8 @@
 use crate::layer::{LayerData, LayerType};
-use crate::parse::ChunkContent;
 use crate::pixel::{self, Pixels};
 use crate::reader::AseReader;
 use crate::tilemap::Tilemap;
+use crate::user_data::UserData;
 use crate::{
     layer::LayersData, AsepriteFile, AsepriteParseError, ColorPalette, PixelFormat, Result,
 };
@@ -18,6 +18,7 @@ pub struct Cel<'a> {
     pub(crate) file: &'a AsepriteFile,
     pub(crate) layer: u32,
     pub(crate) frame: u32,
+    pub(crate) user_data: Option<&'a UserData>,
 }
 
 impl<'a> Cel<'a> {
@@ -32,8 +33,16 @@ impl<'a> Cel<'a> {
     pub fn is_empty(&self) -> bool {
         self.file
             .framedata
-            .cel(self.frame as u16, self.layer as u16)
+            .cel(CelId {
+                frame: self.frame as u16,
+                layer: self.layer as u16,
+            })
             .is_some()
+    }
+
+    /// Returns the cel's user data, if any is present.
+    pub fn user_data(&self) -> Option<&UserData> {
+        self.user_data
     }
 }
 
@@ -43,15 +52,14 @@ pub(crate) struct CelsData {
     data: Vec<Vec<Option<RawCel>>>,
     num_frames: u32,
 }
-
-struct CelId {
-    frame: u16,
-    layer: u16,
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct CelId {
+    pub frame: u16,
+    pub layer: u16,
 }
-
-impl fmt::Debug for CelId {
+impl fmt::Display for CelId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "F{}_L{}", self.frame, self.layer)
+        write!(f, "CelId (F{}_L{})", self.frame, self.layer)
     }
 }
 
@@ -122,12 +130,24 @@ impl CelsData {
 
     // Frame ID must be valid. If Layer ID is out of bounds always returns an
     // empty Vec.
-    pub fn cel(&self, frame_id: u16, layer_id: u16) -> Option<&RawCel> {
-        let layers = &self.data[frame_id as usize];
-        if (layer_id as usize) >= layers.len() {
+    pub fn cel(&self, cel_id: CelId) -> Option<&RawCel> {
+        let CelId { frame, layer } = cel_id;
+        let layers = &self.data[frame as usize];
+        if (layer as usize) >= layers.len() {
             None
         } else {
-            layers[layer_id as usize].as_ref()
+            layers[layer as usize].as_ref()
+        }
+    }
+
+    pub fn cel_mut(&mut self, cel_id: &CelId) -> Option<&mut RawCel> {
+        let frame = cel_id.frame;
+        let layer = cel_id.layer;
+        let layers = &mut self.data[frame as usize];
+        if (layer as usize) >= layers.len() {
+            None
+        } else {
+            layers[layer as usize].as_mut()
         }
     }
 
@@ -149,7 +169,7 @@ impl CelsData {
                     }
                 },
                 CelContent::Linked(other_frame) => {
-                    match self.cel(*other_frame, layer_index as u16) {
+                    match self.cel(CelId{ frame: *other_frame, layer: layer_index as u16 }) {
                         Some(other_cel) => {
                             if let CelContent::Linked(_) = &other_cel.content {
                                 return Err(AsepriteParseError::InvalidInput(
@@ -315,6 +335,7 @@ impl fmt::Debug for ImageContent {
 pub(crate) struct RawCel {
     pub data: CelData,
     pub content: CelContent,
+    pub user_data: Option<UserData>,
 }
 
 fn parse_raw_cel<R: Read>(
@@ -335,14 +356,18 @@ fn parse_compressed_cel<R: Read>(
         .map(|pixels| ImageContent { size, pixels })
 }
 
-pub(crate) fn parse_chunk(chunk: ChunkContent, pixel_format: PixelFormat) -> Result<RawCel> {
-    let data = &chunk.data;
-    let mut reader = AseReader::new(data);
+pub(crate) fn parse_chunk(data: &[u8], pixel_format: PixelFormat) -> Result<RawCel> {
+    let mut reader = AseReader::new(&data);
     let data = CelData::parse(&mut reader)?;
     let cel_type = reader.word()?;
     reader.skip_reserved(7)?;
 
-    CelContent::parse(reader, pixel_format, cel_type).map(|content| RawCel { data, content })
+    let content = CelContent::parse(reader, pixel_format, cel_type)?;
+    Ok(RawCel {
+        data,
+        content,
+        user_data: None,
+    })
 }
 
 // For debugging
