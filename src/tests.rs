@@ -388,6 +388,45 @@ fn tileset_export() {
     compare_with_reference_image(img, "tileset");
 }
 
+#[test]
+fn user_data_sprite() {
+    let f = load_test_file("user_data");
+    let text = f.sprite_user_data().and_then(|d| d.text.as_ref()).unwrap();
+    assert_eq!(text, "test_user_data_sprite");
+}
+
+#[test]
+fn user_data_layer() {
+    let f = load_test_file("user_data");
+    let layer = f.layer(0);
+    let text = layer.user_data().and_then(|d| d.text.as_ref()).unwrap();
+    assert_eq!(text, "test_user_data_layer");
+}
+
+#[test]
+fn user_data_cel() {
+    let f = load_test_file("user_data");
+    let raw_cel = f.framedata.cel(cel::CelId { frame: 0, layer: 0 }).unwrap();
+    let text = raw_cel
+        .user_data
+        .as_ref()
+        .and_then(|d| d.text.as_ref())
+        .unwrap();
+    assert_eq!(text, "test_user_data_cel");
+}
+
+#[test]
+fn user_data_tags() {
+    let f = load_test_file("user_data");
+    let tags = f.tags;
+    let first = tags.get(0).and_then(|t| t.user_data()).unwrap();
+    let second = tags.get(1).and_then(|t| t.user_data()).unwrap();
+    let third = tags.get(2).and_then(|t| t.user_data()).unwrap();
+    assert_eq!(first.text, Some("test_user_data_tag_0".into()));
+    assert_eq!(second.text, None);
+    assert_eq!(third.text, Some("test_user_data_tag_2".into()));
+}
+
 /*
 #[test]
 fn gen_random_pixels() {

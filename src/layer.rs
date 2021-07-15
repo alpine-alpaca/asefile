@@ -1,7 +1,8 @@
 use crate::{
-    cel::Cel,
+    cel::{Cel, CelId},
     reader::AseReader,
     tileset::{TilesetId, TilesetsById},
+    user_data::UserData,
     AsepriteFile, AsepriteParseError, Result,
 };
 use bitflags::bitflags;
@@ -112,11 +113,22 @@ impl<'a> Layer<'a> {
     /// Get a reference to the Cel for this frame in the layer.
     pub fn frame(&self, frame_id: u32) -> Cel {
         assert!(frame_id < self.file.num_frames());
+        let raw_cel = self.file.framedata.cel(CelId {
+            frame: frame_id as u16,
+            layer: self.layer_id as u16,
+        });
+        let user_data = raw_cel.and_then(|raw| raw.user_data.as_ref());
         Cel {
             file: self.file,
-            layer: self.layer_id as u32,
+            layer: self.layer_id,
             frame: frame_id,
+            user_data,
         }
+    }
+
+    /// Returns a reference to the layer's [UserData], if any exists.
+    pub fn user_data(&self) -> Option<&UserData> {
+        self.data().user_data.as_ref()
     }
 }
 
@@ -127,6 +139,7 @@ pub struct LayerData {
     pub(crate) blend_mode: BlendMode,
     pub(crate) opacity: u8,
     pub(crate) layer_type: LayerType,
+    pub(crate) user_data: Option<UserData>,
     child_level: u16,
 }
 
@@ -198,8 +211,8 @@ pub enum BlendMode {
     Divide,
 }
 
-pub(crate) fn parse_layer_chunk(data: &[u8]) -> Result<LayerData> {
-    let mut reader = AseReader::new(data);
+pub(crate) fn parse_chunk(data: &[u8]) -> Result<LayerData> {
+    let mut reader = AseReader::new(&data);
 
     let flags = reader.word()?;
     let layer_type = reader.word()?;
@@ -229,6 +242,7 @@ pub(crate) fn parse_layer_chunk(data: &[u8]) -> Result<LayerData> {
         opacity,
         layer_type,
         child_level,
+        user_data: None,
     })
 }
 

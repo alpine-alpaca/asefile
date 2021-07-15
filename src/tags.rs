@@ -1,4 +1,4 @@
-use crate::{reader::AseReader, AsepriteParseError, Result};
+use crate::{reader::AseReader, user_data::UserData, AsepriteParseError, Result};
 
 /// A tag is a grouping of one or more frames.
 ///
@@ -10,6 +10,7 @@ pub struct Tag {
     from_frame: u16,
     to_frame: u16,
     animation_direction: AnimationDirection,
+    pub(crate) user_data: Option<UserData>,
 }
 
 impl Tag {
@@ -32,6 +33,15 @@ impl Tag {
     pub fn animation_direction(&self) -> AnimationDirection {
         self.animation_direction
     }
+
+    /// Returns the user data for the tag, if any exists.
+    pub fn user_data(&self) -> Option<&UserData> {
+        self.user_data.as_ref()
+    }
+
+    pub(crate) fn set_user_data(&mut self, user_data: UserData) {
+        self.user_data = Some(user_data);
+    }
 }
 
 /// Describes how the tag's frames should be animated.
@@ -45,8 +55,8 @@ pub enum AnimationDirection {
     PingPong,
 }
 
-pub(crate) fn parse_tags_chunk(data: &[u8]) -> Result<Vec<Tag>> {
-    let mut reader = AseReader::new(data);
+pub(crate) fn parse_chunk(data: &[u8]) -> Result<Vec<Tag>> {
+    let mut reader = AseReader::new(&data);
 
     let num_tags = reader.word()?;
     reader.skip_reserved(8)?;
@@ -66,6 +76,7 @@ pub(crate) fn parse_tags_chunk(data: &[u8]) -> Result<Vec<Tag>> {
             from_frame,
             to_frame,
             animation_direction,
+            user_data: None,
         });
     }
 

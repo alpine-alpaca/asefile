@@ -84,7 +84,7 @@ impl ColorPaletteEntry {
     }
 }
 
-pub(crate) fn parse_palette_chunk(data: &[u8]) -> Result<ColorPalette> {
+pub(crate) fn parse_chunk(data: &[u8]) -> Result<ColorPalette> {
     let mut reader = AseReader::new(data);
 
     let _num_total_entries = reader.dword()?;
