@@ -1,7 +1,10 @@
-use crate::{external_file::ExternalFileId, reader::AseReader};
+use std::{collections::HashMap, fmt, io::Read};
+
 use crate::{pixel::Pixels, AsepriteParseError, ColorPalette, PixelFormat, Result};
 use bitflags::bitflags;
-use std::{collections::HashMap, io::Read};
+use image::{Rgba, RgbaImage};
+
+use crate::{external_file::ExternalFileId, reader::AseReader};
 
 /// An id for a [Tileset].
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
@@ -15,6 +18,11 @@ impl TilesetId {
     /// Get a reference to the underlying u32 value.
     pub fn value(&self) -> &u32 {
         &self.0
+    }
+}
+impl fmt::Display for TilesetId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "TilesetId({})", self.0)
     }
 }
 
@@ -134,6 +142,37 @@ impl Tileset {
         self.external_file.as_ref()
     }
 
+    pub(crate) fn write_to_image(&self, image_pixels: &[Rgba<u8>]) -> RgbaImage {
+        let Tileset {
+            tile_size,
+            tile_count,
+            ..
+        } = self;
+        let TileSize { width, height } = tile_size;
+        let tile_width = *width as u32;
+        let tile_height = *height as u32;
+        let pixels_per_tile = tile_size.pixels_per_tile() as u32;
+        let image_height = tile_count * tile_height;
+        let mut image = RgbaImage::new(tile_width, image_height);
+        for tile_idx in 0..*tile_count {
+            let pixel_idx_offset = tile_idx * pixels_per_tile;
+            // tile_y and tile_x are positions relative to the current tile.
+            for tile_y in 0..tile_height {
+                // pixel_y is the absolute y position of the pixel on the image.
+                let pixel_y = tile_y + (tile_idx * tile_height);
+                for tile_x in 0..tile_width {
+                    let sub_index = (tile_y * tile_width) + tile_x;
+                    let pixel_idx = sub_index + pixel_idx_offset;
+                    let image_pixel = image_pixels[pixel_idx as usize];
+                    // Absolute pixel x is equal to tile_x.
+                    image.put_pixel(tile_x, pixel_y, image_pixel);
+                }
+            }
+        }
+
+        image
+    }
+
     pub(crate) fn parse_chunk(data: &[u8], pixel_format: PixelFormat) -> Result<Tileset> {
         let mut reader = AseReader::new(data);
         let id = reader.dword().map(TilesetId)?;
@@ -219,24 +258,13 @@ impl TilesetsById {
             })?;
 
             if let Pixels::Indexed(indexed_pixels) = pixels {
-                if let Some(palette) = palette {
-                    // Validates that all indexed pixels are in the palette's range.
-                    for pixel in indexed_pixels {
-                        let color = palette.color(pixel.value().into());
-                        color.ok_or_else(|| {
-                            AsepriteParseError::InvalidInput(format!(
-                                "Index out of range: {} (max: {})",
-                                pixel.value(),
-                                palette.num_colors()
-                            ))
-                        })?;
-                    }
-                } else {
-                    // Validates that a palette is present if the Tileset is Indexed.
-                    return Err(AsepriteParseError::InvalidInput(
+                let palette = palette.as_ref().ok_or_else(|| {
+                    AsepriteParseError::InvalidInput(
                         "Expected a palette present when resolving indexed image".into(),
-                    ));
-                }
+                    )
+                })?;
+                palette.validate_indexed_pixels(indexed_pixels)?;
+
                 // Validates that the file PixelFormat is indexed if the Tileset is indexed.
                 if let PixelFormat::Indexed { .. } = pixel_format {
                     // Format matches tileset content, ok
@@ -248,5 +276,24 @@ impl TilesetsById {
             }
         }
         Ok(())
+    }
+}
+
+/// An error occured while generating a tileset image.
+#[derive(Debug)]
+pub enum TilesetImageError {
+    MissingTilesetId(TilesetId),
+    NoPixelsInTileset(TilesetId),
+}
+impl fmt::Display for TilesetImageError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TilesetImageError::MissingTilesetId(tileset_id) => {
+                write!(f, "No tileset found with id: {}", tileset_id)
+            }
+            TilesetImageError::NoPixelsInTileset(tileset_id) => {
+                write!(f, "No pixel data for tileset with id: {}", tileset_id)
+            }
+        }
     }
 }

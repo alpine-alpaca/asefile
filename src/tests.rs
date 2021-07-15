@@ -317,6 +317,14 @@ fn indexed() {
 }
 
 #[test]
+fn grayscale() {
+    let f = load_test_file("grayscale");
+    assert_eq!(f.size(), (64, 64));
+
+    compare_with_reference_image(f.frame(0).image(), "grayscale");
+}
+
+#[test]
 fn palette() {
     let f = load_test_file("palette");
 
@@ -327,8 +335,8 @@ fn palette() {
 }
 
 #[test]
-fn tileset() {
-    let f = load_test_file("tileset");
+fn tilemap() {
+    let f = load_test_file("tilemap");
     let img = f.frame(0).image();
     assert_eq!(f.size(), (32, 32));
     let ts = f
@@ -337,21 +345,47 @@ fn tileset() {
         .expect("No tileset found");
     assert_eq!(ts.name(), "test_tileset");
 
-    compare_with_reference_image(img, "tileset");
+    compare_with_reference_image(img, "tilemap");
 }
 
 #[test]
-fn tileset_indexed() {
-    let f = load_test_file("tileset_indexed");
+fn tilemap_indexed() {
+    let f = load_test_file("tilemap_indexed");
     let img = f.frame(0).image();
     assert_eq!(f.size(), (32, 32));
-    let ts = &f
+    let ts = f
         .tilesets()
         .get(&tileset::TilesetId::new(0))
         .expect("No tileset found");
     assert_eq!(ts.name(), "test_tileset");
 
-    compare_with_reference_image(img, "tileset_indexed");
+    compare_with_reference_image(img, "tilemap_indexed");
+}
+
+#[test]
+fn tilemap_grayscale() {
+    let f = load_test_file("tilemap_grayscale");
+    let img = f.frame(0).image();
+    assert_eq!(f.size(), (32, 32));
+    let ts = f
+        .tilesets()
+        .get(&tileset::TilesetId::new(0))
+        .expect("No tileset found");
+    assert_eq!(ts.name(), "test_tileset");
+
+    compare_with_reference_image(img, "tilemap_grayscale");
+}
+
+#[test]
+fn tileset_export() {
+    let f = load_test_file("tileset");
+    let tileset = f
+        .tilesets()
+        .get(&tileset::TilesetId::new(0))
+        .expect("No tileset found");
+    let img = f.tileset_image(tileset.id()).unwrap();
+
+    compare_with_reference_image(img, "tileset");
 }
 
 /*

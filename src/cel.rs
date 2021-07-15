@@ -1,14 +1,13 @@
 use crate::layer::{LayerData, LayerType};
-use crate::pixel::{self, Pixels};
+use crate::pixel::Pixels;
 use crate::reader::AseReader;
 use crate::tilemap::Tilemap;
-use crate::{
-    layer::LayersData, AsepriteFile, AsepriteParseError, ColorPalette, PixelFormat, Result,
-};
+use crate::ColorPalette;
+use crate::{layer::LayersData, AsepriteFile, AsepriteParseError, PixelFormat, Result};
 
 use image::RgbaImage;
+use std::fmt;
 use std::io::Read;
-use std::{fmt, ops::DerefMut};
 
 /// A reference to a single Cel. This contains the image data at a specific
 /// layer and frame. In the timeline view these are the dots.
@@ -130,21 +129,26 @@ impl CelsData {
         }
     }
 
-    fn validate_cel(&self, frame: u32, layer_index: usize, layer: &LayerData) -> Result<()> {
+    fn validate_cel(
+        &self,
+        frame: u32,
+        layer_index: usize,
+        layer: &LayerData,
+        palette: Option<&ColorPalette>,
+    ) -> Result<()> {
         let by_layer = &self.data[frame as usize];
         if let Some(ref cel) = by_layer[layer_index] {
             match &cel.content {
-                CelContent::Raw(image_content) => match image_content.pixels {
+                CelContent::Raw(image_content) => match &image_content.pixels {
                     Pixels::Rgba(_) => {}
-                    Pixels::Grayscale(_) => {
-                        return Err(AsepriteParseError::UnsupportedFeature(
-                            "Grayscale images not supported".into(),
-                        ))
-                    }
-                    Pixels::Indexed(_) => {
-                        return Err(AsepriteParseError::InvalidInput(
-                            "Internal error: unresolved Indexed data".into(),
-                        ));
+                    Pixels::Grayscale(_) => {}
+                    Pixels::Indexed(indexed_pixels) => {
+                        let palette = palette.ok_or_else(|| {
+                            AsepriteParseError::InvalidInput(
+                                "No palette present for indexed pixel data".into(),
+                            )
+                        })?;
+                        palette.validate_indexed_pixels(indexed_pixels)?;
                     }
                 },
                 CelContent::Linked(other_frame) => {
@@ -181,53 +185,12 @@ impl CelsData {
         Ok(())
     }
 
-    // Turn indexed-color cels into rgba cels.
-    pub(crate) fn resolve_palette(
-        &mut self,
-        palette: &ColorPalette,
-        transparent_color_index: u8,
-        layer_info: &LayersData,
-    ) -> Result<()> {
-        let max_col = palette.num_colors();
-        dbg!(
-            max_col,
-            transparent_color_index,
-            palette.color(0),
-            palette.color(1)
-        );
-        for frame in 0..self.num_frames {
-            let layers = &mut self.data[frame as usize];
-            for mut cel in layers {
-                if let Some(cel) = cel.deref_mut() {
-                    if let CelContent::Raw(data) = &cel.content {
-                        if let Pixels::Indexed(pixels) = &data.pixels {
-                            let layer_index = cel.data.layer_index as u32;
-                            let layer = &layer_info[layer_index];
-                            let layer_is_background = layer.is_background();
-                            let rgba_pixels = pixel::resolve_indexed_pixels(
-                                pixels,
-                                palette,
-                                transparent_color_index,
-                                layer_is_background,
-                            )?;
-                            cel.content = CelContent::Raw(ImageContent {
-                                size: data.size,
-                                pixels: Pixels::Rgba(rgba_pixels),
-                            })
-                        }
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
-
-    pub fn validate(&self, layers_data: &LayersData) -> Result<()> {
+    pub fn validate(&self, layers_data: &LayersData, palette: Option<&ColorPalette>) -> Result<()> {
         for frame in 0..self.num_frames {
             let by_layer = &self.data[frame as usize];
             for layer_index in 0..by_layer.len() {
                 let layer = &layers_data[layer_index as u32];
-                self.validate_cel(frame, layer_index, layer)?;
+                self.validate_cel(frame, layer_index, layer, palette)?;
             }
         }
         Ok(())
