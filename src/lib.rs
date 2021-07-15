@@ -126,5 +126,7 @@ pub use layer::{BlendMode, Layer, LayerFlags};
 pub use palette::{ColorPalette, ColorPaletteEntry};
 pub use slice::{Slice, Slice9, SliceKey, SliceOrigin, SlicePivot, SliceSize};
 pub use tags::{AnimationDirection, Tag};
-pub use tileset::{ExternalTilesetReference, TileSize, Tileset, TilesetId, TilesetsById};
+pub use tileset::{
+    ExternalTilesetReference, TileSize, Tileset, TilesetId, TilesetImageError, TilesetsById,
+};
 pub use user_data::UserData;
