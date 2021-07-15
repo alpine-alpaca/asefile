@@ -125,4 +125,6 @@ pub use file::{AsepriteFile, Frame, LayersIter, PixelFormat};
 pub use layer::{BlendMode, Layer, LayerFlags};
 pub use palette::{ColorPalette, ColorPaletteEntry};
 pub use tags::{AnimationDirection, Tag};
-pub use tileset::{ExternalTilesetReference, TileSize, Tileset, TilesetId, TilesetsById};
+pub use tileset::{
+    ExternalTilesetReference, TileSize, Tileset, TilesetId, TilesetImageError, TilesetsById,
+};
