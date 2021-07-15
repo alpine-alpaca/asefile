@@ -493,20 +493,20 @@ fn set_luminocity(r: f64, g: f64, b: f64, lum: f64) -> (f64, f64, f64) {
 }
 
 fn clip_color(mut r: f64, mut g: f64, mut b: f64) -> (f64, f64, f64) {
-    let l = luminosity(r, g, b);
-    let n = r.min(g.min(b));
-    let x = r.max(g.max(b));
+    let lum = luminosity(r, g, b);
+    let min = r.min(g.min(b));
+    let max = r.max(g.max(b));
 
-    if n < 0.0 {
-        r = l + (((r - l) * l) / (l - n));
-        g = l + (((g - l) * l) / (l - n));
-        b = l + (((b - l) * l) / (l - n));
+    if min < 0.0 {
+        r = lum + (((r - lum) * lum) / (lum - min));
+        g = lum + (((g - lum) * lum) / (lum - min));
+        b = lum + (((b - lum) * lum) / (lum - min));
     }
 
-    if x > 1.0 {
-        r = l + (((r - l) * (1.0 - l)) / (x - l));
-        g = l + (((g - l) * (1.0 - l)) / (x - l));
-        b = l + (((b - l) * (1.0 - l)) / (x - l));
+    if max > 1.0 {
+        r = lum + (((r - lum) * (1.0 - lum)) / (max - lum));
+        g = lum + (((g - lum) * (1.0 - lum)) / (max - lum));
+        b = lum + (((b - lum) * (1.0 - lum)) / (max - lum));
     }
     (r, g, b)
 }
@@ -612,23 +612,19 @@ fn static_sort3_orig(r: f64, g: f64, b: f64) -> (usize, usize, usize) {
     let mid = if r > g {
         if g > b {
             1 // g
+        } else if r > b {
+            2 // b
         } else {
-            if r > b {
-                2 // b
-            } else {
-                0 // r
-            }
+            0 // r
+        }
+    } else if g > b {
+        if b > r {
+            2 // b
+        } else {
+            0 // r
         }
     } else {
-        if g > b {
-            if b > r {
-                2 // b
-            } else {
-                0 // r
-            }
-        } else {
-            1 // g
-        }
+        1 // g
     };
     (min, mid, max)
 }
@@ -717,10 +713,10 @@ fn as_rgb_f64(color: Color8) -> (f64, f64, f64) {
 }
 
 fn from_rgba_i32(r: i32, g: i32, b: i32, a: i32) -> Color8 {
-    debug_assert!(r >= 0 && r <= 255);
-    debug_assert!(g >= 0 && g <= 255);
-    debug_assert!(b >= 0 && b <= 255);
-    debug_assert!(a >= 0 && a <= 255);
+    debug_assert!((0..=255).contains(&r));
+    debug_assert!((0..=255).contains(&g));
+    debug_assert!((0..=255).contains(&b));
+    debug_assert!((0..=255).contains(&a));
 
     Rgba([r as u8, g as u8, b as u8, a as u8])
 }
@@ -814,8 +810,7 @@ fn mul_un8(a: i32, b: i32) -> u8 {
 // DIV_UN8(a, b)    (((uint16_t) (a) * 0xff + ((b) / 2)) / (b))
 fn div_un8(a: i32, b: i32) -> u8 {
     let t = a * 0xff;
-    let u = b / 2;
-    let r = (t + u) / b;
+    let r = (t + (b / 2)) / b;
     r as u8
 }
 // fn mul_un8()
