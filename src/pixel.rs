@@ -152,7 +152,7 @@ impl Pixels {
                 } = index_resolver_data;
                 let palette = palette.expect("Expected a palette when resolving indexed pixels.  Should have been caught in validation");
                 let transparent_color_index = transparent_color_index.expect(
-                    "Indexed tilemap pixels in non-indexed pixel format. Should have been caught in validation",
+                    "Indexed pixels in non-indexed pixel format. Should have been caught in validation",
                 );
                 let resolver = |px: &Indexed| {
                     px.as_rgba(palette, transparent_color_index, layer_is_background)
