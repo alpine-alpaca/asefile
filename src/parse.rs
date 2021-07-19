@@ -12,8 +12,11 @@ use std::io::Read;
 use crate::Result;
 use crate::{cel, color_profile, layer, palette, slice, tags, user_data, Tag};
 
+// LayerParseInfo holds Layer data during file parsing.
 enum LayerParseInfo {
+    // When this is the InProgress variant, parsed layers are pushed onto the vec.
     InProgress(Vec<LayerData>),
+    // Once all layers are parsed, the vec data is moved into the LayersData for sorting and processing.
     Finished(LayersData),
 }
 impl LayerParseInfo {
@@ -24,7 +27,9 @@ impl LayerParseInfo {
         if let Self::InProgress(layers) = self {
             layer::collect_layers(layers).map(Self::Finished)
         } else {
-            Err(AsepriteParseError::InvalidInput("No layers found".into()))
+            Err(AsepriteParseError::InternalError(
+                "Attempted to collect already Finished layer data.".into(),
+            ))
         }
     }
     fn inner(&self) -> Option<&LayersData> {
@@ -500,19 +505,7 @@ impl Chunk {
         let mut chunks: Vec<Chunk> = Vec::new();
         for _idx in 0..count {
             let chunk = Self::read(&mut bytes_available, reader)?;
-            // Attach any user data chunks to the previously read chunk. Otherwise, push chunk to Vec and continue.
             chunks.push(chunk);
-            // if let ChunkType::UserData = chunk.chunk_type {
-            //     let user_data = user_data::parse_userdata_chunk(&chunk.content.data)?;
-            //     let previous_chunk = chunks.last_mut().ok_or_else(|| {
-            //         AsepriteParseError::InvalidInput(
-            //             "Found user data chunk with no previous chunk".into(),
-            //         )
-            //     })?;
-            //     previous_chunk.content.user_data = Some(user_data);
-            // } else {
-
-            // }
         }
         Ok(chunks)
     }
