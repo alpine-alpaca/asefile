@@ -226,7 +226,7 @@ impl AsepriteFile {
         let tileset = self
             .tilesets
             .get(tileset_id)
-            .ok_or_else(|| TilesetImageError::MissingTilesetId(*tileset_id))?;
+            .ok_or_else(|| TilesetImageError::TilesetNotFound(*tileset_id))?;
         let pixels = tileset
             .pixels
             .as_ref()
