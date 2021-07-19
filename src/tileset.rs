@@ -282,7 +282,9 @@ impl TilesetsById {
 /// An error occured while generating a tileset image.
 #[derive(Debug)]
 pub enum TilesetImageError {
+    /// No tileset was found for the provided id.
     MissingTilesetId(TilesetId),
+    /// No pixel data is contained in the tileset with the provided id.
     NoPixelsInTileset(TilesetId),
 }
 impl fmt::Display for TilesetImageError {
