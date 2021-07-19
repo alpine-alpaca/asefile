@@ -2,7 +2,7 @@ use crate::{reader::AseReader, Result};
 use image::Pixel;
 
 /// UserData contains user-provided metadata which describes some other data in the sprite.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct UserData {
     /// User-provided string data.
     pub text: Option<String>,
