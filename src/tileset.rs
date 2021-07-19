@@ -283,14 +283,14 @@ impl TilesetsById {
 #[derive(Debug)]
 pub enum TilesetImageError {
     /// No tileset was found for the provided id.
-    MissingTilesetId(TilesetId),
+    TilesetNotFound(TilesetId),
     /// No pixel data is contained in the tileset with the provided id.
     NoPixelsInTileset(TilesetId),
 }
 impl fmt::Display for TilesetImageError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            TilesetImageError::MissingTilesetId(tileset_id) => {
+            TilesetImageError::TilesetNotFound(tileset_id) => {
                 write!(f, "No tileset found with id: {}", tileset_id)
             }
             TilesetImageError::NoPixelsInTileset(tileset_id) => {
