@@ -12,53 +12,10 @@ use std::io::Read;
 use crate::Result;
 use crate::{cel, color_profile, layer, palette, slice, tags, user_data, Tag};
 
-// LayerParseInfo holds Layer data during file parsing.
-enum LayerParseInfo {
-    // When this is the InProgress variant, parsed layers are pushed onto the vec.
-    InProgress(Vec<LayerData>),
-    // Once all layers are parsed, the vec data is moved into the LayersData for sorting and processing.
-    Finished(LayersData),
-}
-impl LayerParseInfo {
-    fn new() -> Self {
-        Self::InProgress(Vec::new())
-    }
-    fn finalize(self) -> Result<Self> {
-        if let Self::InProgress(layers) = self {
-            layer::collect_layers(layers).map(Self::Finished)
-        } else {
-            Err(AsepriteParseError::InternalError(
-                "Attempted to collect already Finished layer data.".into(),
-            ))
-        }
-    }
-    fn inner(&self) -> Option<&LayersData> {
-        if let Self::Finished(layers_data) = self {
-            Some(layers_data)
-        } else {
-            None
-        }
-    }
-    fn into_inner(self) -> Option<LayersData> {
-        if let Self::Finished(layers_data) = self {
-            Some(layers_data)
-        } else {
-            None
-        }
-    }
-    fn layer_mut(&mut self, index: u32) -> Option<&mut LayerData> {
-        let index = index as usize;
-        match self {
-            LayerParseInfo::InProgress(vec) => vec.get_mut(index),
-            LayerParseInfo::Finished(data) => data.layers.get_mut(index),
-        }
-    }
-}
-
 struct ParseInfo {
     palette: Option<palette::ColorPalette>,
     color_profile: Option<color_profile::ColorProfile>,
-    layers: LayerParseInfo,
+    layers: Vec<LayerData>,
     framedata: cel::CelsData, // Vec<Vec<cel::RawCel>>,
     frame_times: Vec<u16>,
     tags: Option<Vec<Tag>>,
@@ -74,7 +31,7 @@ impl ParseInfo {
         Self {
             palette: None,
             color_profile: None,
-            layers: LayerParseInfo::new(),
+            layers: Vec::new(),
             framedata: cel::CelsData::new(num_frames as u32),
             frame_times: vec![default_frame_time; num_frames as usize],
             tags: None,
@@ -95,11 +52,9 @@ impl ParseInfo {
         Ok(())
     }
     fn add_layer(&mut self, layer_data: LayerData) {
-        if let LayerParseInfo::InProgress(layers) = &mut self.layers {
-            let idx = layers.len();
-            layers.push(layer_data);
-            self.user_data_context = Some(UserDataContext::LayerIndex(idx as u32));
-        }
+        let idx = self.layers.len();
+        self.layers.push(layer_data);
+        self.user_data_context = Some(UserDataContext::LayerIndex(idx as u32));
     }
     fn add_tags(&mut self, tags: Vec<Tag>) {
         self.tags = Some(tags);
@@ -144,7 +99,7 @@ impl ParseInfo {
                 cel.user_data = Some(user_data);
             }
             UserDataContext::LayerIndex(layer_index) => {
-                let layer = self.layers.layer_mut(layer_index).ok_or_else(|| {
+                let layer = self.layers.get_mut(layer_index as usize).ok_or_else(|| {
                     AsepriteParseError::InternalError(format!(
                         "Invalid layer id stored in chunk context: {}",
                         layer_index
@@ -175,19 +130,11 @@ impl ParseInfo {
         self.slices.push(slice);
         self.user_data_context = Some(UserDataContext::SliceIndex(context_idx as u32));
     }
-    fn finalize_layers(&mut self) -> Result<()> {
-        // Move the layers vec out to collect
-        let layers = std::mem::replace(&mut self.layers, LayerParseInfo::new());
-        self.layers = layers.finalize()?;
-        Ok(())
-    }
     // Validate moves the ParseInfo data into an intermediate ValidatedParseInfo struct,
     // which is then used to create the AsepriteFile.
     fn validate(self, pixel_format: &PixelFormat) -> Result<ValidatedParseInfo> {
-        let layers = self
-            .layers
-            .into_inner()
-            .ok_or_else(|| AsepriteParseError::InvalidInput("No layers found".to_owned()))?;
+        let layers = LayersData::from_vec(self.layers)?;
+
         let tilesets = self.tilesets;
         let palette = self.palette;
         tilesets.validate(pixel_format, &palette)?;
@@ -270,11 +217,6 @@ pub fn read_aseprite<R: Read>(input: R) -> Result<AsepriteFile> {
         parse_frame(&mut reader, frame_id, pixel_format, &mut parse_info)?;
     }
 
-    let layers = parse_info
-        .layers
-        .inner()
-        .ok_or_else(|| AsepriteParseError::InvalidInput("No layers found".to_owned()))?;
-
     // println!("==== Layers ====\n{:#?}", layers);
     // println!("{:#?}", parse_info.framedata);
 
@@ -289,9 +231,11 @@ pub fn read_aseprite<R: Read>(input: R) -> Result<AsepriteFile> {
             transparent_color_index,
         } => {
             if let Some(ref palette) = parse_info.palette {
-                parse_info
-                    .framedata
-                    .resolve_palette(palette, transparent_color_index, &layers)?;
+                parse_info.framedata.resolve_palette(
+                    palette,
+                    transparent_color_index,
+                    &parse_info.layers,
+                )?;
             } else {
                 return Err(AsepriteParseError::InvalidInput(
                     "Input file uses indexed color mode but does not contain a palette".into(),
@@ -418,10 +362,6 @@ fn parse_frame<R: Read>(
         }
     }
 
-    if frame_id == 0 {
-        parse_info.finalize_layers()?;
-    }
-
     Ok(())
 }
 
@@ -479,8 +419,8 @@ const CHUNK_HEADER_SIZE: usize = 6;
 const FRAME_HEADER_SIZE: i64 = 16;
 
 struct Chunk {
-    data: Vec<u8>,
     chunk_type: ChunkType,
+    data: Vec<u8>,
 }
 
 impl Chunk {

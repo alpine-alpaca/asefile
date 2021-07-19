@@ -207,7 +207,7 @@ impl CelsData {
         &mut self,
         palette: &ColorPalette,
         transparent_color_index: u8,
-        layer_info: &LayersData,
+        layer_info: &[LayerData],
     ) -> Result<()> {
         let max_col = palette.num_colors();
         dbg!(
@@ -223,7 +223,7 @@ impl CelsData {
                     if let CelContent::Raw(data) = &cel.content {
                         if let Pixels::Indexed(pixels) = &data.pixels {
                             let layer_index = cel.data.layer_index as u32;
-                            let layer = &layer_info[layer_index];
+                            let layer = &layer_info[layer_index as usize];
                             let layer_is_background = layer.is_background();
                             let rgba_pixels = pixel::resolve_indexed_pixels(
                                 pixels,
