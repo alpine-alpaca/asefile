@@ -3,7 +3,7 @@ use std::io::Read;
 use crate::{reader::AseReader, user_data::UserData, Result};
 
 /// A slice is a region of the sprite with a name and optional [UserData].
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Slice {
     /// The name of the slice. Not guaranteed to be unique.
     pub name: String,
@@ -14,7 +14,7 @@ pub struct Slice {
 }
 
 /// A Slice9 divides a [Slice] into nine regions for 9-slice scaling.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Slice9 {
     /// Center X position (relative to slice bounds).
     pub center_x: i32,
@@ -41,7 +41,7 @@ impl Slice9 {
 }
 
 /// A SliceOrigin describes the position of a [Slice] within the sprite.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct SliceOrigin {
     /// A [Slice]'s x origin coordinate in the sprite.
     pub x: i32,
@@ -57,7 +57,7 @@ impl SliceOrigin {
 }
 
 /// SliceSize describes the size of a [Slice] in pixels.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct SliceSize {
     /// Slice width. This can be 0 if this slice is hidden in the animation from the given frame.
     pub width: u32,
@@ -73,7 +73,7 @@ impl SliceSize {
 }
 
 /// SlicePivot describes a [Slice]'s pivot position relative to the Slice's origin.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct SlicePivot {
     /// Pivot X position (relative to the slice origin).
     pub x: i32,
@@ -89,7 +89,7 @@ impl SlicePivot {
 }
 
 /// SliceKey describes the position and shape of a [Slice], starting at a given frame.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct SliceKey {
     /// Starting frame number for this slice key. (This slice is valid from this frame to the end of the animation.)
     pub from_frame: u32,

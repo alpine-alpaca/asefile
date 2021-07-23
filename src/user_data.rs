@@ -1,12 +1,13 @@
 use crate::{reader::AseReader, Result};
+use image::Pixel;
 
 /// UserData contains user-provided metadata which describes some other data in the sprite.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct UserData {
     /// User-provided string data.
     pub text: Option<String>,
-    /// User-provided color in bytes [red, green, blue, alpha].
-    pub color: Option<[u8; 4]>,
+    /// User-provided color.
+    pub color: Option<image::Rgba<u8>>,
 }
 
 pub(crate) fn parse_userdata_chunk(data: &[u8]) -> Result<UserData> {
@@ -24,7 +25,8 @@ pub(crate) fn parse_userdata_chunk(data: &[u8]) -> Result<UserData> {
         let green = reader.byte()?;
         let blue = reader.byte()?;
         let alpha = reader.byte()?;
-        Some([red, green, blue, alpha])
+        let rgba = image::Rgba::from_channels(red, green, blue, alpha);
+        Some(rgba)
     } else {
         None
     };

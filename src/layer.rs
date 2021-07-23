@@ -171,6 +171,11 @@ impl LayersData {
         }
         Ok(())
     }
+    pub(crate) fn from_vec(layers: Vec<LayerData>) -> Result<Self> {
+        // TODO: Validate some properties
+        let parents = compute_parents(&layers);
+        Ok(LayersData { layers, parents })
+    }
 }
 
 impl Index<u32> for LayersData {
@@ -307,10 +312,4 @@ fn compute_parents(layers: &[LayerData]) -> Vec<Option<u32>> {
         result.push(parent);
     }
     result
-}
-
-pub(crate) fn collect_layers(layers: Vec<LayerData>) -> Result<LayersData> {
-    // TODO: Validate some properties
-    let parents = compute_parents(&layers);
-    Ok(LayersData { layers, parents })
 }
