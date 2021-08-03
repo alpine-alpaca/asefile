@@ -427,6 +427,14 @@ fn user_data_tags() {
     assert_eq!(third.text, Some("test_user_data_tag_2".into()));
 }
 
+#[test]
+fn cel_overflow() {
+    let file = load_test_file("cel_overflow");
+    let frame = file.frame(0);
+    let img = frame.image();
+    assert_eq!(file.width as u32, img.width());
+    assert_eq!(file.height as u32, img.height());
+}
 /*
 #[test]
 fn gen_random_pixels() {

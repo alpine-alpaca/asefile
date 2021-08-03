@@ -479,11 +479,18 @@ fn write_tilemap_cel_to_image(
                 for pixel_x in 0..tile_width {
                     let pixel_idx = ((pixel_y * tile_width) + pixel_x) as usize;
                     let image_pixel = tile_pixels[pixel_idx];
-                    let image_x = ((tile_x * tile_width) + pixel_x + cel_x) as u32;
-                    let image_y = ((tile_y * tile_height) + pixel_y + cel_y) as u32;
-                    let src = *image.get_pixel(image_x, image_y);
-                    let new = blend_fn(src, image_pixel, *opacity);
-                    image.put_pixel(image_x, image_y, new);
+                    let image_x = (tile_x * tile_width) + pixel_x + cel_x;
+                    let image_y = (tile_y * tile_height) + pixel_y + cel_y;
+                    // Skip pixels off of the canvas.
+                    let x_in_bounds = (0..(image.width() as i32)).contains(&image_x);
+                    let y_in_bounds = (0..(image.height() as i32)).contains(&image_y);
+                    if x_in_bounds && y_in_bounds {
+                        let image_x = image_x as u32;
+                        let image_y = image_y as u32;
+                        let src = *image.get_pixel(image_x, image_y);
+                        let new = blend_fn(src, image_pixel, *opacity);
+                        image.put_pixel(image_x, image_y, new);
+                    }
                 }
             }
         }
