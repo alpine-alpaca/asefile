@@ -12,41 +12,10 @@ use std::io::Read;
 use crate::Result;
 use crate::{cel, color_profile, layer, palette, slice, tags, user_data, Tag};
 
-enum LayerParseInfo {
-    InProgress(Vec<LayerData>),
-    Finished(LayersData),
-}
-impl LayerParseInfo {
-    fn new() -> Self {
-        Self::InProgress(Vec::new())
-    }
-    fn finalize(self) -> Result<Self> {
-        if let Self::InProgress(layers) = self {
-            layer::collect_layers(layers).map(Self::Finished)
-        } else {
-            Err(AsepriteParseError::InvalidInput("No layers found".into()))
-        }
-    }
-    fn into_inner(self) -> Option<LayersData> {
-        if let Self::Finished(layers_data) = self {
-            Some(layers_data)
-        } else {
-            None
-        }
-    }
-    fn layer_mut(&mut self, index: u32) -> Option<&mut LayerData> {
-        let index = index as usize;
-        match self {
-            LayerParseInfo::InProgress(vec) => vec.get_mut(index),
-            LayerParseInfo::Finished(data) => data.layers.get_mut(index),
-        }
-    }
-}
-
 struct ParseInfo {
     palette: Option<palette::ColorPalette>,
     color_profile: Option<color_profile::ColorProfile>,
-    layers: LayerParseInfo,
+    layers: Vec<LayerData>,
     framedata: cel::CelsData, // Vec<Vec<cel::RawCel>>,
     frame_times: Vec<u16>,
     tags: Option<Vec<Tag>>,
@@ -62,7 +31,7 @@ impl ParseInfo {
         Self {
             palette: None,
             color_profile: None,
-            layers: LayerParseInfo::new(),
+            layers: Vec::new(),
             framedata: cel::CelsData::new(num_frames as u32),
             frame_times: vec![default_frame_time; num_frames as usize],
             tags: None,
@@ -83,11 +52,9 @@ impl ParseInfo {
         Ok(())
     }
     fn add_layer(&mut self, layer_data: LayerData) {
-        if let LayerParseInfo::InProgress(layers) = &mut self.layers {
-            let idx = layers.len();
-            layers.push(layer_data);
-            self.user_data_context = Some(UserDataContext::LayerIndex(idx as u32));
-        }
+        let idx = self.layers.len();
+        self.layers.push(layer_data);
+        self.user_data_context = Some(UserDataContext::LayerIndex(idx as u32));
     }
     fn add_tags(&mut self, tags: Vec<Tag>) {
         self.tags = Some(tags);
@@ -132,7 +99,7 @@ impl ParseInfo {
                 cel.user_data = Some(user_data);
             }
             UserDataContext::LayerIndex(layer_index) => {
-                let layer = self.layers.layer_mut(layer_index).ok_or_else(|| {
+                let layer = self.layers.get_mut(layer_index as usize).ok_or_else(|| {
                     AsepriteParseError::InternalError(format!(
                         "Invalid layer id stored in chunk context: {}",
                         layer_index
@@ -163,19 +130,11 @@ impl ParseInfo {
         self.slices.push(slice);
         self.user_data_context = Some(UserDataContext::SliceIndex(context_idx as u32));
     }
-    fn finalize_layers(&mut self) -> Result<()> {
-        // Move the layers vec out to collect
-        let layers = std::mem::replace(&mut self.layers, LayerParseInfo::new());
-        self.layers = layers.finalize()?;
-        Ok(())
-    }
     // Validate moves the ParseInfo data into an intermediate ValidatedParseInfo struct,
     // which is then used to create the AsepriteFile.
     fn validate(self, pixel_format: &PixelFormat) -> Result<ValidatedParseInfo> {
-        let layers = self
-            .layers
-            .into_inner()
-            .ok_or_else(|| AsepriteParseError::InvalidInput("No layers found".to_owned()))?;
+        let layers = LayersData::from_vec(self.layers)?;
+
         let tilesets = self.tilesets;
         let palette = self.palette;
         tilesets.validate(pixel_format, &palette)?;
@@ -376,10 +335,6 @@ fn parse_frame<R: Read>(
         }
     }
 
-    if frame_id == 0 {
-        parse_info.finalize_layers()?;
-    }
-
     Ok(())
 }
 
@@ -463,19 +418,7 @@ impl Chunk {
         let mut chunks: Vec<Chunk> = Vec::new();
         for _idx in 0..count {
             let chunk = Self::read(&mut bytes_available, reader)?;
-            // Attach any user data chunks to the previously read chunk. Otherwise, push chunk to Vec and continue.
             chunks.push(chunk);
-            // if let ChunkType::UserData = chunk.chunk_type {
-            //     let user_data = user_data::parse_userdata_chunk(&chunk.content.data)?;
-            //     let previous_chunk = chunks.last_mut().ok_or_else(|| {
-            //         AsepriteParseError::InvalidInput(
-            //             "Found user data chunk with no previous chunk".into(),
-            //         )
-            //     })?;
-            //     previous_chunk.content.user_data = Some(user_data);
-            // } else {
-
-            // }
         }
         Ok(chunks)
     }

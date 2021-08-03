@@ -1,3 +1,5 @@
+use image::Pixel;
+
 use crate::*;
 use std::path::PathBuf;
 
@@ -49,6 +51,16 @@ fn compare_with_reference_image(img: image::RgbaImage, filename: &str) {
 fn is_transparent(col: &image::Rgba<u8>) -> bool {
     col.0[3] == 0
 }
+
+fn test_user_data(s: &str, c: [u8; 4]) -> UserData {
+    UserData {
+        text: Some(s.to_string()),
+        color: Some(image::Rgba::from_channels(c[0], c[1], c[2], c[3])),
+    }
+}
+
+const COLOR_GREEN: [u8; 4] = [0, 255, 0, 255];
+const COLOR_RED: [u8; 4] = [255, 0, 0, 255];
 
 #[test]
 fn basic() {
@@ -391,28 +403,27 @@ fn tileset_export() {
 #[test]
 fn user_data_sprite() {
     let f = load_test_file("user_data");
-    let text = f.sprite_user_data().and_then(|d| d.text.as_ref()).unwrap();
-    assert_eq!(text, "test_user_data_sprite");
+    let user_data = f.sprite_user_data().unwrap();
+    let expected = test_user_data("test_user_data_sprite", COLOR_GREEN);
+    assert_eq!(*user_data, expected);
 }
 
 #[test]
 fn user_data_layer() {
     let f = load_test_file("user_data");
     let layer = f.layer(0);
-    let text = layer.user_data().and_then(|d| d.text.as_ref()).unwrap();
-    assert_eq!(text, "test_user_data_layer");
+    let user_data = layer.user_data().unwrap();
+    let expected = test_user_data("test_user_data_layer", COLOR_RED);
+    assert_eq!(*user_data, expected);
 }
 
 #[test]
 fn user_data_cel() {
     let f = load_test_file("user_data");
     let raw_cel = f.framedata.cel(cel::CelId { frame: 0, layer: 0 }).unwrap();
-    let text = raw_cel
-        .user_data
-        .as_ref()
-        .and_then(|d| d.text.as_ref())
-        .unwrap();
-    assert_eq!(text, "test_user_data_cel");
+    let user_data = raw_cel.user_data.as_ref().unwrap();
+    let expected = test_user_data("test_user_data_cel", COLOR_GREEN);
+    assert_eq!(*user_data, expected);
 }
 
 #[test]
@@ -422,9 +433,18 @@ fn user_data_tags() {
     let first = tags.get(0).and_then(|t| t.user_data()).unwrap();
     let second = tags.get(1).and_then(|t| t.user_data()).unwrap();
     let third = tags.get(2).and_then(|t| t.user_data()).unwrap();
-    assert_eq!(first.text, Some("test_user_data_tag_0".into()));
-    assert_eq!(second.text, None);
-    assert_eq!(third.text, Some("test_user_data_tag_2".into()));
+
+    let expected_first = test_user_data("test_user_data_tag_0", COLOR_GREEN);
+    assert_eq!(*first, expected_first);
+
+    let expected_second = UserData {
+        text: None,
+        color: Some(image::Rgba::from_channels(0, 0, 0, 255)),
+    };
+    assert_eq!(*second, expected_second);
+
+    let expected_third = test_user_data("test_user_data_tag_2", COLOR_RED);
+    assert_eq!(*third, expected_third);
 }
 
 #[test]
