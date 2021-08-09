@@ -13,9 +13,9 @@ impl ExternalFileId {
         Self(id)
     }
 
-    /// Returns a reference to the id's underlying u32 value.
-    pub fn value(&self) -> &u32 {
-        &self.0
+    /// Returns the underlying u32 value.
+    pub fn value(&self) -> u32 {
+        self.0
     }
 }
 
