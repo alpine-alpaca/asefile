@@ -3,17 +3,21 @@ use std::io::Read;
 use crate::{reader::AseReader, user_data::UserData, Result};
 
 /// A slice is a region of the sprite with a name and optional [UserData].
+///
+/// See [official docs on slices](https://www.aseprite.org/docs/slices/) for
+/// details.
 #[derive(Debug, Clone)]
 pub struct Slice {
     /// The name of the slice. Not guaranteed to be unique.
     pub name: String,
-    /// A set of [SliceKey] structs. Together, these describe the shape and position of a slice during animation.
+    /// A set of [SliceKey] structs. Together, these describe the shape and position
+    /// of a slice during animation.
     pub keys: Vec<SliceKey>,
     /// Optional [UserData] associated with this slice.
     pub user_data: Option<UserData>,
 }
 
-/// A Slice9 divides a [Slice] into nine regions for 9-slice scaling.
+/// A devision of a [Slice] into nine regions for 9-slice scaling.
 #[derive(Debug, Clone, Copy)]
 pub struct Slice9 {
     /// Center X position (relative to slice bounds).
@@ -25,6 +29,7 @@ pub struct Slice9 {
     /// Center height.
     pub center_height: u32,
 }
+
 impl Slice9 {
     fn read<R: Read>(reader: &mut AseReader<R>) -> Result<Self> {
         let center_x = reader.long()?;
@@ -40,7 +45,7 @@ impl Slice9 {
     }
 }
 
-/// A SliceOrigin describes the position of a [Slice] within the sprite.
+/// The position of a [Slice] within the sprite.
 #[derive(Debug, Clone, Copy)]
 pub struct SliceOrigin {
     /// A [Slice]'s x origin coordinate in the sprite.
@@ -48,6 +53,7 @@ pub struct SliceOrigin {
     /// A [Slice]'s y origin coordinate in the sprite.
     pub y: i32,
 }
+
 impl SliceOrigin {
     fn read<R: Read>(reader: &mut AseReader<R>) -> Result<Self> {
         let x = reader.long()?;
@@ -56,14 +62,16 @@ impl SliceOrigin {
     }
 }
 
-/// SliceSize describes the size of a [Slice] in pixels.
+/// The size of a [Slice] in pixels.
 #[derive(Debug, Clone, Copy)]
 pub struct SliceSize {
-    /// Slice width. This can be 0 if this slice is hidden in the animation from the given frame.
+    /// Slice width. This can be 0 if this slice is hidden in the animation from
+    /// the given frame.
     pub width: u32,
     /// Slice height.
     pub height: u32,
 }
+
 impl SliceSize {
     fn read<R: Read>(reader: &mut AseReader<R>) -> Result<Self> {
         let width = reader.dword()?;
@@ -72,7 +80,7 @@ impl SliceSize {
     }
 }
 
-/// SlicePivot describes a [Slice]'s pivot position relative to the Slice's origin.
+/// A [Slice]'s pivot position relative to the slice's origin.
 #[derive(Debug, Clone, Copy)]
 pub struct SlicePivot {
     /// Pivot X position (relative to the slice origin).
@@ -88,10 +96,11 @@ impl SlicePivot {
     }
 }
 
-/// SliceKey describes the position and shape of a [Slice], starting at a given frame.
+/// The position and shape of a [Slice], starting at a given frame.
 #[derive(Debug, Clone, Copy)]
 pub struct SliceKey {
-    /// Starting frame number for this slice key. (This slice is valid from this frame to the end of the animation.)
+    /// Starting frame number for this slice key. (This slice is valid from this
+    /// frame to the end of the animation.)
     pub from_frame: u32,
     /// Origin of the slice.
     pub origin: SliceOrigin,

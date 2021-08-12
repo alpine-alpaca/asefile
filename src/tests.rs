@@ -353,7 +353,7 @@ fn tilemap() {
     assert_eq!(f.size(), (32, 32));
     let ts = f
         .tilesets()
-        .get(&tileset::TilesetId::new(0))
+        .get(tileset::TilesetId::from_raw(0))
         .expect("No tileset found");
     assert_eq!(ts.name(), "test_tileset");
 
@@ -367,7 +367,7 @@ fn tilemap_indexed() {
     assert_eq!(f.size(), (32, 32));
     let ts = f
         .tilesets()
-        .get(&tileset::TilesetId::new(0))
+        .get(tileset::TilesetId::from_raw(0))
         .expect("No tileset found");
     assert_eq!(ts.name(), "test_tileset");
 
@@ -381,7 +381,7 @@ fn tilemap_grayscale() {
     assert_eq!(f.size(), (32, 32));
     let ts = f
         .tilesets()
-        .get(&tileset::TilesetId::new(0))
+        .get(tileset::TilesetId::from_raw(0))
         .expect("No tileset found");
     assert_eq!(ts.name(), "test_tileset");
 
@@ -393,7 +393,7 @@ fn tileset_export() {
     let f = load_test_file("tileset");
     let tileset = f
         .tilesets()
-        .get(&tileset::TilesetId::new(0))
+        .get(tileset::TilesetId::from_raw(0))
         .expect("No tileset found");
     let img = f.tileset_image(tileset.id()).unwrap();
 

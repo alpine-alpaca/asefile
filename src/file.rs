@@ -225,16 +225,16 @@ impl AsepriteFile {
     /// The image has width equal to the tile width and height equal to (tile_height * tile_count).
     pub fn tileset_image(
         &self,
-        tileset_id: &TilesetId,
+        tileset_id: TilesetId,
     ) -> std::result::Result<RgbaImage, TilesetImageError> {
         let tileset = self
             .tilesets
             .get(tileset_id)
-            .ok_or_else(|| TilesetImageError::MissingTilesetId(*tileset_id))?;
+            .ok_or_else(|| TilesetImageError::MissingTilesetId(tileset_id))?;
         let pixels = tileset
             .pixels
             .as_ref()
-            .ok_or_else(|| TilesetImageError::NoPixelsInTileset(*tileset_id))?;
+            .ok_or_else(|| TilesetImageError::NoPixelsInTileset(tileset_id))?;
         let resolver_data = pixel::IndexResolverData {
             palette: self.palette.as_ref(),
             transparent_color_index: self.pixel_format.transparent_color_index(),
@@ -306,7 +306,7 @@ impl AsepriteFile {
                 };
                 let tileset = self
                     .tilesets()
-                    .get(&tileset_id)
+                    .get(tileset_id)
                     .expect("Tilemap layer references a missing tileset. Should have been caught by LayersData::validate()");
                 let tileset_pixels = tileset
                     .pixels
@@ -463,8 +463,8 @@ fn write_tilemap_cel_to_image(
     let tiles = &tilemap_data.tiles;
     // tile dimensions
     let tile_size = tileset.tile_size();
-    let tile_width = *tile_size.width() as i32;
-    let tile_height = *tile_size.height() as i32;
+    let tile_width = tile_size.width() as i32;
+    let tile_height = tile_size.height() as i32;
     // pixels
     let blend_fn = blend_mode_to_blend_fn(*blend_mode);
 
@@ -474,7 +474,7 @@ fn write_tilemap_cel_to_image(
             let tilemap_tile_idx = (tile_x + (tile_y * tilemap_width)) as usize;
             let tile = &tiles[tilemap_tile_idx];
             let tile_id = &tile.id;
-            let tile_pixels = tile_slice(&pixels, tile_size, tile_id);
+            let tile_pixels = tile_slice(&pixels, &tile_size, tile_id);
             for pixel_y in 0..tile_height {
                 for pixel_x in 0..tile_width {
                     let pixel_idx = ((pixel_y * tile_width) + pixel_x) as usize;

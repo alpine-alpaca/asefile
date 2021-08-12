@@ -161,7 +161,7 @@ impl LayersData {
         for l in &self.layers {
             if let LayerType::Tilemap(id) = l.layer_type {
                 // Validate that all Tilemap layers reference an existing Tileset.
-                tilesets.get(&id).ok_or_else(|| {
+                tilesets.get(id).ok_or_else(|| {
                     AsepriteParseError::InvalidInput(format!(
                         "Tilemap layer references a missing tileset (id {}",
                         id.0
@@ -255,7 +255,7 @@ fn parse_layer_type<R: Read>(id: u16, reader: &mut AseReader<R>) -> Result<Layer
     match id {
         0 => Ok(LayerType::Image),
         1 => Ok(LayerType::Group),
-        2 => reader.dword().map(TilesetId::new).map(LayerType::Tilemap),
+        2 => reader.dword().map(TilesetId::from_raw).map(LayerType::Tilemap),
         _ => Err(AsepriteParseError::InvalidInput(format!(
             "Invalid layer type: {}",
             id

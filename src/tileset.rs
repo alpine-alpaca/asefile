@@ -11,15 +11,17 @@ use crate::{external_file::ExternalFileId, reader::AseReader};
 pub struct TilesetId(pub(crate) u32);
 
 impl TilesetId {
-    /// Create a new TilesetId over a raw u32 value.
-    pub fn new(value: u32) -> Self {
+    /// Create a new `TilesetId` from a raw `u32` value.
+    pub fn from_raw(value: u32) -> Self {
         Self(value)
     }
-    /// Get a reference to the underlying u32 value.
-    pub fn value(&self) -> &u32 {
-        &self.0
+
+    /// Get the underlying `u32` value.
+    pub fn value(&self) -> u32 {
+        self.0
     }
 }
+
 impl fmt::Display for TilesetId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "TilesetId({})", self.0)
@@ -41,22 +43,22 @@ bitflags! {
     }
 }
 
-/// A [Tileset] reference to an [ExternalFile].
-#[derive(Debug)]
+/// A [Tileset] reference to an [crate::ExternalFile].
+#[derive(Debug, Clone)]
 pub struct ExternalTilesetReference {
     external_file_id: ExternalFileId,
     tileset_id: TilesetId,
 }
 
 impl ExternalTilesetReference {
-    /// The id of the [ExternalFile].
-    pub fn external_file_id(&self) -> &ExternalFileId {
-        &self.external_file_id
+    /// The id of the [crate::ExternalFile].
+    pub fn external_file_id(&self) -> ExternalFileId {
+        self.external_file_id
     }
 
-    /// The id of the [Tileset] in the [ExternalFile].
-    pub fn tileset_id(&self) -> &TilesetId {
-        &self.tileset_id
+    /// The id of the [Tileset] in the [crate::ExternalFile].
+    pub fn tileset_id(&self) -> TilesetId {
+        self.tileset_id
     }
 
     fn parse<T: Read>(reader: &mut AseReader<T>) -> Result<Self> {
@@ -68,7 +70,7 @@ impl ExternalTilesetReference {
 }
 
 /// The size of a tile in pixels.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct TileSize {
     width: u16,
     height: u16,
@@ -76,21 +78,27 @@ pub struct TileSize {
 
 impl TileSize {
     /// Tile width in pixels.
-    pub fn width(&self) -> &u16 {
-        &self.width
+    pub fn width(&self) -> u16 {
+        self.width
     }
 
     /// Tile height in pixels.
-    pub fn height(&self) -> &u16 {
-        &self.height
+    pub fn height(&self) -> u16 {
+        self.height
     }
 
-    pub(crate) fn pixels_per_tile(&self) -> u16 {
-        self.width * self.height
+    pub(crate) fn pixels_per_tile(&self) -> u32 {
+        self.width as u32 * self.height as u32
     }
 }
 
-/// Various attributes of a tileset.
+/// A set of tiles.
+///
+/// In the GUI, this is the collection of tiles that you build up in the side
+/// bar. Each tile has the same size and is identified by an Id.
+///
+/// See [official docs for tilemaps and tilesets](https://www.aseprite.org/docs/tilemap/)
+/// for details.
 #[derive(Debug)]
 pub struct Tileset {
     pub(crate) id: TilesetId,
@@ -105,43 +113,47 @@ pub struct Tileset {
 
 impl Tileset {
     /// Tileset id.
-    pub fn id(&self) -> &TilesetId {
-        &self.id
+    pub fn id(&self) -> TilesetId {
+        self.id
     }
 
     /// From the Aseprite file spec:
     /// When true, tilemaps using this tileset use tile ID=0 as empty tile.
     /// In rare cases this is false, the empty tile will be equal to 0xffffffff (used in internal versions of Aseprite).
-    pub fn empty_tile_is_id_zero(&self) -> &bool {
-        &self.empty_tile_is_id_zero
+    pub fn empty_tile_is_id_zero(&self) -> bool {
+        self.empty_tile_is_id_zero
     }
 
     /// Number of tiles.
-    pub fn tile_count(&self) -> &u32 {
-        &self.tile_count
+    pub fn tile_count(&self) -> u32 {
+        self.tile_count
     }
 
     /// Tile width and height.
-    pub fn tile_size(&self) -> &TileSize {
-        &self.tile_size
+    pub fn tile_size(&self) -> TileSize {
+        self.tile_size
     }
 
     /// Number to show in the UI for the tile with index=0. Default is 1.
     /// Only used for Aseprite UI purposes. Not used for data representation.
-    pub fn base_index(&self) -> &i16 {
-        &self.base_index
+    pub fn base_index(&self) -> i16 {
+        self.base_index
     }
 
     /// Tileset name. May not be unique among tilesets.
-    pub fn name(&self) -> &String {
+    pub fn name(&self) -> &str {
         &self.name
     }
 
-    /// When Some, includes a link to an external file.
+    /// When non-empty, describes a link to an external file.
     pub fn external_file(&self) -> Option<&ExternalTilesetReference> {
         self.external_file.as_ref()
     }
 
+    // Collect all tiles into one long vertical image.
+    //
+    // Each tile takes the source data from the input pixels and copies them
+    // to the output image.
     pub(crate) fn write_to_image(&self, image_pixels: &[Rgba<u8>]) -> RgbaImage {
         let Tileset {
             tile_size,
@@ -219,7 +231,7 @@ impl Tileset {
     }
 }
 
-/// A map of [TilesetId] values to [Tileset] instances.
+/// A map of [TilesetId]s to [Tileset]s.
 #[derive(Debug)]
 pub struct TilesetsById(HashMap<TilesetId, Tileset>);
 
@@ -229,7 +241,7 @@ impl TilesetsById {
     }
 
     pub(crate) fn add(&mut self, tileset: Tileset) {
-        self.0.insert(*tileset.id(), tileset);
+        self.0.insert(tileset.id(), tileset);
     }
 
     /// Returns a reference to the underlying HashMap value.
@@ -238,8 +250,8 @@ impl TilesetsById {
     }
 
     /// Get a reference to a [Tileset] from a [TilesetId], if the entry exists.
-    pub fn get(&self, id: &TilesetId) -> Option<&Tileset> {
-        self.0.get(id)
+    pub fn get(&self, id: TilesetId) -> Option<&Tileset> {
+        self.0.get(&id)
     }
 
     pub(crate) fn validate(
@@ -287,6 +299,7 @@ pub enum TilesetImageError {
     /// No pixel data contained in the tileset with the given id.
     NoPixelsInTileset(TilesetId),
 }
+
 impl fmt::Display for TilesetImageError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

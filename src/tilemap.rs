@@ -2,6 +2,7 @@ use std::io::Read;
 
 use crate::{reader::AseReader, tile, AsepriteParseError, Result};
 
+// The data stored inside a tilemap layer.
 #[derive(Debug)]
 pub(crate) struct Tilemap {
     pub width: u16,  // width in number of tiles
