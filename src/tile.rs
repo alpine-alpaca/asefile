@@ -1,11 +1,12 @@
 use crate::{reader::AseReader, tilemap::TileBitmaskHeader, Result};
 use std::{io::Read, ops::Index};
 
-#[derive(Debug)]
-pub(crate) struct TileId(pub(crate) u32);
+#[derive(Debug, Clone, Copy)]
+pub struct TileId(pub u32);
 
-#[derive(Debug)]
-pub(crate) struct Tile {
+/// A tile is a reference to a single tile in a tilemap.
+#[derive(Debug, Clone)]
+pub struct Tile {
     pub id: TileId,
     pub flip_x: bool,
     pub flip_y: bool,

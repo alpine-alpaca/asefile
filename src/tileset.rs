@@ -231,7 +231,7 @@ impl Tileset {
     }
 }
 
-/// A map of [TilesetId]s to [Tileset]s.
+/// A map from [TilesetId]s to [Tileset]s.
 #[derive(Debug)]
 pub struct TilesetsById(HashMap<TilesetId, Tileset>);
 

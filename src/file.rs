@@ -179,7 +179,7 @@ impl AsepriteFile {
         Frame { file: self, index }
     }
 
-    /// A HashMap of external files by id.
+    /// A mapping from external file ids to external files.
     pub fn external_files(&self) -> &ExternalFilesById {
         &self.external_files
     }
@@ -245,13 +245,13 @@ impl AsepriteFile {
         Ok(tileset.write_to_image(image_pixels.as_ref()))
     }
 
-    /// Access the user data for the entire sprite, if any exists.
+    /// The user data for the entire sprite, if any exists.
     pub fn sprite_user_data(&self) -> Option<&UserData> {
         self.sprite_user_data.as_ref()
     }
 
-    /// Access the file's [Slice]s.
-    pub fn slices(&self) -> &Vec<Slice> {
+    /// All [Slice]s in the file.
+    pub fn slices(&self) -> &[Slice] {
         &self.slices
     }
 
@@ -341,12 +341,9 @@ impl AsepriteFile {
         }
     }
 
-    pub(crate) fn layer_image(&self, frame: u16, layer_id: usize) -> RgbaImage {
+    pub(crate) fn layer_image(&self, cel_id: CelId) -> RgbaImage {
         let mut image = RgbaImage::new(self.width as u32, self.height as u32);
-        if let Some(cel) = self.framedata.cel(CelId {
-            frame,
-            layer: layer_id as u16,
-        }) {
+        if let Some(cel) = self.framedata.cel(cel_id) {
             self.write_cel(&mut image, cel);
         }
         image
@@ -393,16 +390,13 @@ impl<'a> Frame<'a> {
     /// Get cel corresponding to the given layer in this frame.
     pub fn layer(&self, layer_id: u32) -> Cel {
         assert!(layer_id < self.file.num_layers());
-        let raw_cel = self.file.framedata.cel(CelId {
+        let cel_id = CelId {
             frame: self.index as u16,
             layer: layer_id as u16,
-        });
-        let user_data = raw_cel.and_then(|raw| raw.user_data.as_ref());
+        };
         Cel {
             file: self.file,
-            layer: layer_id,
-            frame: self.index,
-            user_data,
+            cel_id,
         }
     }
 
@@ -458,9 +452,9 @@ fn write_tilemap_cel_to_image(
     let cel_x = *x as i32;
     let cel_y = *y as i32;
     // tilemap dimensions
-    let tilemap_width = tilemap_data.width as i32;
-    let tilemap_height = tilemap_data.height as i32;
-    let tiles = &tilemap_data.tiles;
+    let tilemap_width = tilemap_data.width() as i32;
+    let tilemap_height = tilemap_data.height() as i32;
+    //let tiles = &tilemap_data.tiles;
     // tile dimensions
     let tile_size = tileset.tile_size();
     let tile_width = tile_size.width() as i32;
@@ -471,8 +465,9 @@ fn write_tilemap_cel_to_image(
     for tile_y in 0..tilemap_height {
         for tile_x in 0..tilemap_width {
             // TODO: support tile transform flags
-            let tilemap_tile_idx = (tile_x + (tile_y * tilemap_width)) as usize;
-            let tile = &tiles[tilemap_tile_idx];
+            let tile = tilemap_data
+                .tile(tile_x as u16, tile_y as u16)
+                .expect("Invalid tile index");
             let tile_id = &tile.id;
             let tile_pixels = tile_slice(&pixels, &tile_size, tile_id);
             for pixel_y in 0..tile_height {

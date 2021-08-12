@@ -11,38 +11,36 @@ use image::RgbaImage;
 use std::fmt;
 use std::io::Read;
 
-/// A reference to a single Cel. This contains the image data at a specific
+/// A reference to a single Cel. A cel contains the image data at a specific
 /// layer and frame. In the timeline view these are the dots.
+///
+/// You can get a `cel` by going either via frame then layer or vice versa.
+///
+/// [Official docs for cels](https://www.aseprite.org/docs/cel/).
 #[derive(Debug)]
 pub struct Cel<'a> {
     pub(crate) file: &'a AsepriteFile,
-    pub(crate) layer: u32,
-    pub(crate) frame: u32,
-    pub(crate) user_data: Option<&'a UserData>,
+    pub(crate) cel_id: CelId,
 }
 
 impl<'a> Cel<'a> {
     /// This cel as an image. Result has the same dimensions as the [AsepriteFile].
     /// If the cel is empty, all image pixels will be transparent.
     pub fn image(&self) -> RgbaImage {
-        self.file
-            .layer_image(self.frame as u16, self.layer as usize)
+        self.file.layer_image(self.cel_id)
     }
 
     /// Returns `true` if the cel contains no data.
     pub fn is_empty(&self) -> bool {
-        self.file
-            .framedata
-            .cel(CelId {
-                frame: self.frame as u16,
-                layer: self.layer as u16,
-            })
-            .is_some()
+        self.file.framedata.cel(self.cel_id).is_some()
     }
 
     /// Returns the cel's user data, if any is present.
     pub fn user_data(&self) -> Option<&UserData> {
-        self.user_data
+        self.file
+            .framedata
+            .cel(self.cel_id)
+            .and_then(|c| c.user_data.as_ref())
     }
 }
 
@@ -57,9 +55,10 @@ pub(crate) struct CelId {
     pub frame: u16,
     pub layer: u16,
 }
+
 impl fmt::Display for CelId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "CelId (F{}_L{})", self.frame, self.layer)
+        write!(f, "CelId(F{},L{})", self.frame, self.layer)
     }
 }
 
@@ -84,7 +83,7 @@ impl fmt::Debug for CelsData {
 }
 
 impl CelsData {
-    pub fn new(num_frames: u32) -> Self {
+    pub(crate) fn new(num_frames: u32) -> Self {
         let mut data = Vec::with_capacity(num_frames as usize);
         // Initialize with one layer (outer Vec) and zero RawCel (inner Vec).
         data.resize_with(num_frames as usize, || vec![None]);
@@ -101,7 +100,7 @@ impl CelsData {
         Ok(())
     }
 
-    pub fn add_cel(&mut self, frame_id: u16, cel: RawCel) -> Result<()> {
+    pub(crate) fn add_cel(&mut self, frame_id: u16, cel: RawCel) -> Result<()> {
         self.check_valid_frame_id(frame_id)?;
 
         let layer_id = cel.data.layer_index;
@@ -121,7 +120,7 @@ impl CelsData {
         Ok(())
     }
 
-    pub fn frame_cels(&self, frame_id: u16) -> impl Iterator<Item = (u32, &RawCel)> {
+    pub(crate) fn frame_cels(&self, frame_id: u16) -> impl Iterator<Item = (u32, &RawCel)> {
         self.data[frame_id as usize]
             .iter()
             .enumerate()
@@ -130,7 +129,7 @@ impl CelsData {
 
     // Frame ID must be valid. If Layer ID is out of bounds always returns an
     // empty Vec.
-    pub fn cel(&self, cel_id: CelId) -> Option<&RawCel> {
+    pub(crate) fn cel(&self, cel_id: CelId) -> Option<&RawCel> {
         let CelId { frame, layer } = cel_id;
         let layers = &self.data[frame as usize];
         if (layer as usize) >= layers.len() {
@@ -140,7 +139,7 @@ impl CelsData {
         }
     }
 
-    pub fn cel_mut(&mut self, cel_id: &CelId) -> Option<&mut RawCel> {
+    pub(crate) fn cel_mut(&mut self, cel_id: &CelId) -> Option<&mut RawCel> {
         let frame = cel_id.frame;
         let layer = cel_id.layer;
         let layers = &mut self.data[frame as usize];
@@ -207,7 +206,11 @@ impl CelsData {
         Ok(())
     }
 
-    pub fn validate(&self, layers_data: &LayersData, palette: Option<&ColorPalette>) -> Result<()> {
+    pub(crate) fn validate(
+        &self,
+        layers_data: &LayersData,
+        palette: Option<&ColorPalette>,
+    ) -> Result<()> {
         for frame in 0..self.num_frames {
             let by_layer = &self.data[frame as usize];
             for layer_index in 0..by_layer.len() {
@@ -224,12 +227,14 @@ pub(crate) struct ImageSize {
     pub width: u16,
     pub height: u16,
 }
+
 impl ImageSize {
     pub(crate) fn parse<R: Read>(reader: &mut AseReader<R>) -> Result<Self> {
         let width = reader.word()?;
         let height = reader.word()?;
         Ok(Self { width, height })
     }
+
     pub(crate) fn pixel_count(&self) -> usize {
         self.width as usize * self.height as usize
     }
@@ -270,6 +275,7 @@ pub(crate) enum CelContent {
     Linked(u16),
     Tilemap(Tilemap),
 }
+
 impl CelContent {
     fn parse<R: Read>(
         mut reader: AseReader<R>,

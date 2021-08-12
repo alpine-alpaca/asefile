@@ -16,7 +16,8 @@ pub enum LayerType {
     /// A layer that groups other layers and does not contain any image data.
     /// In Aseprite these are represented by a folder icon.
     Group,
-    /// A tilemap layer. Contains the tileset index.
+    /// A tilemap layer. Contains the index of the tileset used for the tiles.
+    ///
     /// In Aseprite these are represented by a grid icon.
     Tilemap(TilesetId),
 }
@@ -113,16 +114,13 @@ impl<'a> Layer<'a> {
     /// Get a reference to the Cel for this frame in the layer.
     pub fn frame(&self, frame_id: u32) -> Cel {
         assert!(frame_id < self.file.num_frames());
-        let raw_cel = self.file.framedata.cel(CelId {
+        let cel_id = CelId {
             frame: frame_id as u16,
             layer: self.layer_id as u16,
-        });
-        let user_data = raw_cel.and_then(|raw| raw.user_data.as_ref());
+        };
         Cel {
             file: self.file,
-            layer: self.layer_id,
-            frame: frame_id,
-            user_data,
+            cel_id,
         }
     }
 
@@ -150,12 +148,13 @@ impl LayerData {
 }
 
 #[derive(Debug)]
-pub struct LayersData {
+pub(crate) struct LayersData {
     // Sorted back to front (or bottom to top in the GUI, but groups occur
     // before their children, i.e., lower index)
     pub(crate) layers: Vec<LayerData>,
     parents: Vec<Option<u32>>,
 }
+
 impl LayersData {
     pub(crate) fn validate(&self, tilesets: &TilesetsById) -> Result<()> {
         for l in &self.layers {
@@ -171,6 +170,7 @@ impl LayersData {
         }
         Ok(())
     }
+
     pub(crate) fn from_vec(layers: Vec<LayerData>) -> Result<Self> {
         // TODO: Validate some properties
         let parents = compute_parents(&layers);
@@ -255,7 +255,10 @@ fn parse_layer_type<R: Read>(id: u16, reader: &mut AseReader<R>) -> Result<Layer
     match id {
         0 => Ok(LayerType::Image),
         1 => Ok(LayerType::Group),
-        2 => reader.dword().map(TilesetId::from_raw).map(LayerType::Tilemap),
+        2 => reader
+            .dword()
+            .map(TilesetId::from_raw)
+            .map(LayerType::Tilemap),
         _ => Err(AsepriteParseError::InvalidInput(format!(
             "Invalid layer type: {}",
             id

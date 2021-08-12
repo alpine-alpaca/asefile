@@ -88,6 +88,7 @@ pub struct SlicePivot {
     /// Pivot Y position (relative to the slice origin).
     pub y: i32,
 }
+
 impl SlicePivot {
     fn read<R: Read>(reader: &mut AseReader<R>) -> Result<Self> {
         let x = reader.long()?;
@@ -111,6 +112,7 @@ pub struct SliceKey {
     /// Optional pivot information.
     pub pivot: Option<SlicePivot>,
 }
+
 impl SliceKey {
     fn read<R: Read>(reader: &mut AseReader<R>, flags: u32) -> Result<Self> {
         let from_frame = reader.dword()?;

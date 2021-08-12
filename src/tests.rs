@@ -303,7 +303,7 @@ fn single_layer() {
     assert_eq!(f.num_layers(), 6);
     assert_eq!(f.layer_by_name("Layer 1").map(|l| l.id()), Some(1));
 
-    compare_with_reference_image(f.layer_image(2, 1), "single_layer");
+    compare_with_reference_image(f.frame(2).layer(1).image(), "single_layer");
 }
 
 #[test]

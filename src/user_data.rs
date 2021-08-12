@@ -1,7 +1,11 @@
 use crate::{reader::AseReader, Result};
 use image::Pixel;
 
-/// UserData contains user-provided metadata which describes some other data in the sprite.
+/// User-provided metadata which can be attached to various items.
+///
+/// Aseprite allows attaching user data to several entities, both via the GUI
+/// and via extensions. For an example see the discussion
+/// [How to associate data to each cel](https://community.aseprite.org/t/how-to-associate-data-to-each-cel-frame/6307).
 #[derive(Debug, Clone, PartialEq)]
 pub struct UserData {
     /// User-provided string data.
