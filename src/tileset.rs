@@ -1,8 +1,11 @@
-use std::{collections::HashMap, fmt, io::Read};
+use std::{collections::HashMap, error::Error, fmt, io::Read, sync::Arc};
 
-use crate::{pixel::Pixels, AsepriteParseError, ColorPalette, PixelFormat, Result};
+use crate::{
+    pixel::{Pixels, RawPixels},
+    AsepriteParseError, ColorPalette, PixelFormat, Result,
+};
 use bitflags::bitflags;
-use image::{Rgba, RgbaImage};
+use image::RgbaImage;
 
 use crate::{external_file::ExternalFileId, reader::AseReader};
 
@@ -92,7 +95,7 @@ impl TileSize {
     }
 }
 
-/// A set of tiles.
+/// A set of tiles of the same size.
 ///
 /// In the GUI, this is the collection of tiles that you build up in the side
 /// bar. Each tile has the same size and is identified by an Id.
@@ -100,7 +103,7 @@ impl TileSize {
 /// See [official docs for tilemaps and tilesets](https://www.aseprite.org/docs/tilemap/)
 /// for details.
 #[derive(Debug)]
-pub struct Tileset {
+pub struct Tileset<P = Pixels> {
     pub(crate) id: TilesetId,
     pub(crate) empty_tile_is_id_zero: bool,
     pub(crate) tile_count: u32,
@@ -108,10 +111,10 @@ pub struct Tileset {
     pub(crate) base_index: i16,
     pub(crate) name: String,
     pub(crate) external_file: Option<ExternalTilesetReference>,
-    pub(crate) pixels: Option<Pixels>,
+    pub(crate) pixels: Option<P>,
 }
 
-impl Tileset {
+impl<P> Tileset<P> {
     /// Tileset id.
     pub fn id(&self) -> TilesetId {
         self.id
@@ -149,43 +152,13 @@ impl Tileset {
     pub fn external_file(&self) -> Option<&ExternalTilesetReference> {
         self.external_file.as_ref()
     }
+}
 
-    // Collect all tiles into one long vertical image.
-    //
-    // Each tile takes the source data from the input pixels and copies them
-    // to the output image.
-    pub(crate) fn write_to_image(&self, image_pixels: &[Rgba<u8>]) -> RgbaImage {
-        let Tileset {
-            tile_size,
-            tile_count,
-            ..
-        } = self;
-        let TileSize { width, height } = tile_size;
-        let tile_width = *width as u32;
-        let tile_height = *height as u32;
-        let pixels_per_tile = tile_size.pixels_per_tile() as u32;
-        let image_height = tile_count * tile_height;
-        let mut image = RgbaImage::new(tile_width, image_height);
-        for tile_idx in 0..*tile_count {
-            let pixel_idx_offset = tile_idx * pixels_per_tile;
-            // tile_y and tile_x are positions relative to the current tile.
-            for tile_y in 0..tile_height {
-                // pixel_y is the absolute y position of the pixel on the image.
-                let pixel_y = tile_y + (tile_idx * tile_height);
-                for tile_x in 0..tile_width {
-                    let sub_index = (tile_y * tile_width) + tile_x;
-                    let pixel_idx = sub_index + pixel_idx_offset;
-                    let image_pixel = image_pixels[pixel_idx as usize];
-                    // Absolute pixel x is equal to tile_x.
-                    image.put_pixel(tile_x, pixel_y, image_pixel);
-                }
-            }
-        }
-
-        image
-    }
-
-    pub(crate) fn parse_chunk(data: &[u8], pixel_format: PixelFormat) -> Result<Tileset> {
+impl Tileset<RawPixels> {
+    pub(crate) fn parse_chunk(
+        data: &[u8],
+        pixel_format: PixelFormat,
+    ) -> Result<Tileset<RawPixels>> {
         let mut reader = AseReader::new(data);
         let id = reader.dword().map(TilesetId)?;
         let flags = reader.dword().map(|val| TilesetFlags { bits: val })?;
@@ -215,7 +188,7 @@ impl Tileset {
                 let _compressed_length = reader.dword()?;
                 let expected_pixel_count =
                     (tile_count * (tile_height as u32) * (tile_width as u32)) as usize;
-                Pixels::from_compressed(reader, pixel_format, expected_pixel_count).map(Some)?
+                RawPixels::from_compressed(reader, pixel_format, expected_pixel_count).map(Some)?
             }
         };
         Ok(Tileset {
@@ -231,68 +204,109 @@ impl Tileset {
     }
 }
 
+impl Tileset<Pixels> {
+    /// Get the image for the given tile.
+    pub fn tile_image(&self, tile_index: u32) -> RgbaImage {
+        assert!(tile_index < self.tile_count());
+        let width = self.tile_size.width() as u32;
+        let height = self.tile_size.height() as u32;
+        let pixels = self.pixels.as_ref().expect("No pixel data in tileset");
+        let pixels_per_tile = (width * height) as usize;
+        let start_ofs = tile_index as usize * pixels_per_tile;
+        let raw: Vec<u8> = pixels
+            .clone_as_image_rgba()
+            .into_owned()
+            .into_iter()
+            .skip(start_ofs)
+            .take(pixels_per_tile)
+            .flat_map(|pixel| pixel.0)
+            .collect();
+        RgbaImage::from_raw(width, height, raw).expect("Mismatched image size")
+    }
+
+    // Collect all tiles into one long vertical image.
+    pub(crate) fn image(&self) -> RgbaImage {
+        let width = self.tile_size.width() as u32;
+        let tile_height = self.tile_size.height() as u32;
+        let image_height = tile_height * self.tile_count;
+        let pixels = self.pixels.as_ref().expect("No pixel data in tileset");
+
+        let raw: Vec<u8> = pixels
+            .clone_as_image_rgba()
+            .into_owned()
+            .into_iter()
+            .flat_map(|pixel| pixel.0)
+            .collect();
+        RgbaImage::from_raw(width, image_height, raw).expect("Mismatched image size")
+    }
+}
+
 /// A map from [TilesetId]s to [Tileset]s.
 #[derive(Debug)]
-pub struct TilesetsById(HashMap<TilesetId, Tileset>);
+pub struct TilesetsById<P = Pixels>(HashMap<TilesetId, Tileset<P>>);
 
-impl TilesetsById {
+impl<P> TilesetsById<P> {
     pub(crate) fn new() -> Self {
         Self(HashMap::new())
     }
 
-    pub(crate) fn add(&mut self, tileset: Tileset) {
+    pub(crate) fn add(&mut self, tileset: Tileset<P>) {
         self.0.insert(tileset.id(), tileset);
     }
 
     /// Returns a reference to the underlying HashMap value.
-    pub fn map(&self) -> &HashMap<TilesetId, Tileset> {
+    pub fn map(&self) -> &HashMap<TilesetId, Tileset<P>> {
         &self.0
     }
 
     /// Get a reference to a [Tileset] from a [TilesetId], if the entry exists.
-    pub fn get(&self, id: TilesetId) -> Option<&Tileset> {
+    pub fn get(&self, id: TilesetId) -> Option<&Tileset<P>> {
         self.0.get(&id)
     }
+}
 
+impl TilesetsById<RawPixels> {
     pub(crate) fn validate(
-        &self,
+        self,
         pixel_format: &PixelFormat,
-        palette: &Option<ColorPalette>,
-    ) -> Result<()> {
-        for tileset in self.0.values() {
+        palette: Option<Arc<ColorPalette>>,
+    ) -> Result<TilesetsById<Pixels>> {
+        let mut result = HashMap::with_capacity(self.0.capacity());
+        for (id, tileset) in self.0.into_iter() {
             // Validates that all Tilesets contain their own pixel data.
             // External file references currently not supported.
-            let pixels = tileset.pixels.as_ref().ok_or_else(|| {
+            let _ = tileset.pixels.as_ref().ok_or_else(|| {
                 AsepriteParseError::UnsupportedFeature(
                     "Expected Tileset data to contain pixels. External file Tilesets not supported"
                         .into(),
                 )
             })?;
 
-            if let Pixels::Indexed(indexed_pixels) = pixels {
-                let palette = palette.as_ref().ok_or_else(|| {
-                    AsepriteParseError::InvalidInput(
-                        "Expected a palette present when resolving indexed image".into(),
-                    )
-                })?;
-                palette.validate_indexed_pixels(indexed_pixels)?;
+            let pixels = tileset
+                .pixels
+                .unwrap()
+                .validate(palette.clone(), pixel_format, false)?;
 
-                // Validates that the file PixelFormat is indexed if the Tileset is indexed.
-                if let PixelFormat::Indexed { .. } = pixel_format {
-                    // Format matches tileset content, ok
-                } else {
-                    return Err(AsepriteParseError::InvalidInput(
-                        "Found indexed tileset pixels in non-indexed pixel format.".into(),
-                    ));
-                }
-            }
+            result.insert(
+                id,
+                Tileset {
+                    pixels: Some(pixels),
+                    id: tileset.id,
+                    empty_tile_is_id_zero: tileset.empty_tile_is_id_zero,
+                    tile_count: tileset.tile_count,
+                    tile_size: tileset.tile_size,
+                    base_index: tileset.base_index,
+                    name: tileset.name,
+                    external_file: tileset.external_file,
+                },
+            );
         }
-        Ok(())
+        Ok(TilesetsById(result))
     }
 }
 
 /// An error occured while generating a tileset image.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum TilesetImageError {
     /// No tileset was found for the given id.
     MissingTilesetId(TilesetId),
@@ -309,6 +323,14 @@ impl fmt::Display for TilesetImageError {
             TilesetImageError::NoPixelsInTileset(tileset_id) => {
                 write!(f, "No pixel data for tileset with id: {}", tileset_id)
             }
+        }
+    }
+}
+
+impl Error for TilesetImageError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            _ => None,
         }
     }
 }

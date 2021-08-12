@@ -1,5 +1,5 @@
-use crate::layer::{LayerData, LayerType};
-use crate::pixel::Pixels;
+use crate::layer::LayerType;
+use crate::pixel::{Pixels, RawPixels};
 use crate::reader::AseReader;
 use crate::tilemap::Tilemap;
 use crate::user_data::UserData;
@@ -10,6 +10,7 @@ use crate::{
 use image::RgbaImage;
 use std::fmt;
 use std::io::Read;
+use std::sync::Arc;
 
 /// A reference to a single Cel. A cel contains the image data at a specific
 /// layer and frame. In the timeline view these are the dots.
@@ -45,9 +46,9 @@ impl<'a> Cel<'a> {
 }
 
 /// Organizes all Cels into a 2d array.
-pub(crate) struct CelsData {
+pub(crate) struct CelsData<P> {
     // Mapping: frame_id -> layer_id -> Option<RawCel>
-    data: Vec<Vec<Option<RawCel>>>,
+    data: Vec<Vec<Option<RawCel<P>>>>,
     num_frames: u32,
 }
 #[derive(Debug, Clone, Copy)]
@@ -62,7 +63,10 @@ impl fmt::Display for CelId {
     }
 }
 
-impl fmt::Debug for CelsData {
+impl<P> fmt::Debug for CelsData<P>
+where
+    P: fmt::Debug,
+{
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut d = f.debug_map();
         for frame in 0..self.data.len() {
@@ -82,7 +86,7 @@ impl fmt::Debug for CelsData {
     }
 }
 
-impl CelsData {
+impl<P> CelsData<P> {
     pub(crate) fn new(num_frames: u32) -> Self {
         let mut data = Vec::with_capacity(num_frames as usize);
         // Initialize with one layer (outer Vec) and zero RawCel (inner Vec).
@@ -100,7 +104,7 @@ impl CelsData {
         Ok(())
     }
 
-    pub(crate) fn add_cel(&mut self, frame_id: u16, cel: RawCel) -> Result<()> {
+    pub(crate) fn add_cel(&mut self, frame_id: u16, cel: RawCel<P>) -> Result<()> {
         self.check_valid_frame_id(frame_id)?;
 
         let layer_id = cel.data.layer_index;
@@ -120,7 +124,7 @@ impl CelsData {
         Ok(())
     }
 
-    pub(crate) fn frame_cels(&self, frame_id: u16) -> impl Iterator<Item = (u32, &RawCel)> {
+    pub(crate) fn frame_cels(&self, frame_id: u16) -> impl Iterator<Item = (u32, &RawCel<P>)> {
         self.data[frame_id as usize]
             .iter()
             .enumerate()
@@ -129,7 +133,7 @@ impl CelsData {
 
     // Frame ID must be valid. If Layer ID is out of bounds always returns an
     // empty Vec.
-    pub(crate) fn cel(&self, cel_id: CelId) -> Option<&RawCel> {
+    pub(crate) fn cel(&self, cel_id: CelId) -> Option<&RawCel<P>> {
         let CelId { frame, layer } = cel_id;
         let layers = &self.data[frame as usize];
         if (layer as usize) >= layers.len() {
@@ -139,7 +143,7 @@ impl CelsData {
         }
     }
 
-    pub(crate) fn cel_mut(&mut self, cel_id: &CelId) -> Option<&mut RawCel> {
+    pub(crate) fn cel_mut(&mut self, cel_id: &CelId) -> Option<&mut RawCel<P>> {
         let frame = cel_id.frame;
         let layer = cel_id.layer;
         let layers = &mut self.data[frame as usize];
@@ -149,76 +153,118 @@ impl CelsData {
             layers[layer as usize].as_mut()
         }
     }
+}
 
-    fn validate_cel(
-        &self,
-        frame: u32,
-        layer_index: usize,
-        layer: &LayerData,
-        palette: Option<&ColorPalette>,
-    ) -> Result<()> {
-        let by_layer = &self.data[frame as usize];
-        if let Some(ref cel) = by_layer[layer_index] {
-            match &cel.content {
-                CelContent::Raw(image_content) => match &image_content.pixels {
-                    Pixels::Rgba(_) => {}
-                    Pixels::Grayscale(_) => {}
-                    Pixels::Indexed(indexed_pixels) => {
-                        let palette = palette.ok_or_else(|| {
-                            AsepriteParseError::InvalidInput(
-                                "No palette present for indexed pixel data".into(),
-                            )
-                        })?;
-                        palette.validate_indexed_pixels(indexed_pixels)?;
-                    }
-                },
-                CelContent::Linked(other_frame) => {
-                    match self.cel(CelId{ frame: *other_frame, layer: layer_index as u16 }) {
-                        Some(other_cel) => {
-                            if let CelContent::Linked(_) = &other_cel.content {
-                                return Err(AsepriteParseError::InvalidInput(
-                                    format!("Invalid Cel reference. Cel (f:{},l:{}) links to cel (f:{},l:{}) but that cel links to another cel.",
-                                frame, layer_index, *other_frame, layer_index)
-                                ))
-                            }
-                        }
-                        None => {
-                            return Err(AsepriteParseError::InvalidInput(
-                                format!("Invalid Cel reference. Cel (f:{},l:{}) links to cel (f:{},l:{}) but that cel contains no data.",
-                            frame, layer_index, *other_frame, layer_index)
-                            ))
-                        }
-                    }
-                }
-                CelContent::Tilemap(_) => {
-                    // Verify that a Tilemap cel belongs to a Tilemap layer.
-                    if let LayerType::Tilemap(_) = layer.layer_type {
-                        // Tilemap Layer, ok
-                    } else {
-                        return Err(AsepriteParseError::InvalidInput(format!(
-                            "Invalid cel. Tilemap Cel (f:{},l:{}) outside of tilemap layer.",
-                            frame, layer_index
-                        )));
-                    }
-                }
+impl RawCel<RawPixels> {
+    pub(crate) fn validate<F>(
+        self,
+        cel_id: CelId,
+        layers: &LayersData,
+        pixel_format: &PixelFormat,
+        palette: Option<Arc<ColorPalette>>,
+        validate_ref: &F,
+    ) -> Result<RawCel<Pixels>>
+    where
+        F: Fn(CelId) -> Result<()>,
+    {
+        let content = match self.content {
+            CelContent::Raw(image_content) => {
+                let layer_is_background = layers[cel_id.layer as u32].is_background();
+                let image_content =
+                    image_content.validate(palette.clone(), pixel_format, layer_is_background)?;
+                CelContent::Raw(image_content)
             }
-        }
-        Ok(())
+            CelContent::Linked(other_frame) => {
+                let ref_cel_id = CelId {
+                    frame: other_frame as u16,
+                    layer: cel_id.layer,
+                };
+                validate_ref(ref_cel_id)?;
+                CelContent::Linked(other_frame)
+            }
+            CelContent::Tilemap(tilemap) => {
+                if let LayerType::Tilemap(_) = layers[cel_id.layer as u32].layer_type {
+                    // all good
+                } else {
+                    return Err(AsepriteParseError::InvalidInput(format!(
+                        "Invalid cel. Tilemap Cel ({}) outside of tilemap layer.",
+                        cel_id
+                    )));
+                }
+                CelContent::Tilemap(tilemap)
+            }
+        };
+        Ok(RawCel {
+            data: self.data,
+            content,
+            user_data: self.user_data,
+        })
     }
+}
 
+impl CelsData<RawPixels> {
     pub(crate) fn validate(
-        &self,
-        layers_data: &LayersData,
-        palette: Option<&ColorPalette>,
-    ) -> Result<()> {
-        for frame in 0..self.num_frames {
-            let by_layer = &self.data[frame as usize];
-            for layer_index in 0..by_layer.len() {
-                let layer = &layers_data[layer_index as u32];
-                self.validate_cel(frame, layer_index, layer, palette)?;
+        self,
+        layers: &LayersData,
+        pixel_format: &PixelFormat,
+        palette: Option<Arc<ColorPalette>>,
+    ) -> Result<CelsData<Pixels>> {
+        let num_frames = self.num_frames;
+        let num_layers = layers.layers.len();
+        let mut result = CelsData {
+            data: Vec::with_capacity(self.data.len()),
+            num_frames,
+        };
+        // Mapping from CelId -> bool. True if the cel can be used as a target
+        // for a linked cel. That means it must exist, and it must be a raw cel.
+        // We copy it out here, so we can consume the actual data in the
+        // validation/transformation step.
+        let mut is_linkable_cel: Vec<bool> = Vec::with_capacity(num_frames as usize * num_layers);
+        for frame in 0..num_frames {
+            for layer in 0..num_layers {
+                let cel_id = CelId {
+                    frame: frame as u16,
+                    layer: layer as u16,
+                };
+                is_linkable_cel.push(self.cel(cel_id).map_or(false, |c| c.content.is_raw()));
             }
         }
-        Ok(())
+        let validate_ref = |id: CelId| {
+            let index = id.frame as usize * num_layers + id.layer as usize;
+            if is_linkable_cel[index] {
+                Ok(())
+            } else {
+                Err(AsepriteParseError::InvalidInput(format!(
+                    "Cel {} is not a valid target for a linked cel",
+                    id
+                )))
+            }
+        };
+
+        // Validate and transform each cel. Consumes input arrays.
+        for (frame, cels_by_layer) in self.data.into_iter().enumerate() {
+            result.data.push(Vec::with_capacity(cels_by_layer.len()));
+            for (layer, opt_cel) in cels_by_layer.into_iter().enumerate() {
+                let cel = if let Some(cel) = opt_cel {
+                    let cel_id = CelId {
+                        frame: frame as u16,
+                        layer: layer as u16,
+                    };
+                    Some(cel.validate(
+                        cel_id,
+                        layers,
+                        pixel_format,
+                        palette.clone(),
+                        &validate_ref,
+                    )?)
+                } else {
+                    None
+                };
+                result.data[frame as usize].push(cel);
+            }
+        }
+
+        Ok(result)
     }
 }
 
@@ -242,13 +288,14 @@ impl ImageSize {
 
 // CelData holds fields which are common to all cel types.
 #[derive(Debug)]
-pub(crate) struct CelData {
+pub(crate) struct CelCommon {
     pub layer_index: u16,
     pub x: i16,
     pub y: i16,
     pub opacity: u8,
 }
-impl CelData {
+
+impl CelCommon {
     fn parse<R: Read>(reader: &mut AseReader<R>) -> Result<Self> {
         let layer_index = reader.word()?;
         let x = reader.short()?;
@@ -263,20 +310,45 @@ impl CelData {
     }
 }
 
-pub(crate) struct ImageContent {
+#[derive(Debug)]
+pub(crate) struct ImageContent<P> {
     pub size: ImageSize,
-    pub pixels: Pixels,
+    pub pixels: P,
+}
+
+impl ImageContent<RawPixels> {
+    fn validate(
+        self,
+        palette: Option<Arc<ColorPalette>>,
+        pixel_format: &PixelFormat,
+        layer_is_background: bool,
+    ) -> Result<ImageContent<Pixels>> {
+        let size = self.size;
+        let pixels = self
+            .pixels
+            .validate(palette, pixel_format, layer_is_background)?;
+        Ok(ImageContent { size, pixels })
+    }
 }
 
 // CelContent holds data specific to each type of cel.
 #[derive(Debug)]
-pub(crate) enum CelContent {
-    Raw(ImageContent),
+pub(crate) enum CelContent<P> {
+    Raw(ImageContent<P>),
     Linked(u16),
     Tilemap(Tilemap),
 }
 
-impl CelContent {
+impl<P> CelContent<P> {
+    fn is_raw(&self) -> bool {
+        match self {
+            CelContent::Raw(_) => true,
+            _ => false,
+        }
+    }
+}
+
+impl CelContent<RawPixels> {
     fn parse<R: Read>(
         mut reader: AseReader<R>,
         pixel_format: PixelFormat,
@@ -295,40 +367,40 @@ impl CelContent {
     }
 }
 
-impl fmt::Debug for ImageContent {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "<{} bytes>", self.pixels.byte_count())
-    }
-}
+// impl fmt::Debug for ImageContent<RawPixels> {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         write!(f, "<{} bytes>", self.pixels.byte_count())
+//     }
+// }
 
 #[derive(Debug)]
-pub(crate) struct RawCel {
-    pub data: CelData,
-    pub content: CelContent,
+pub(crate) struct RawCel<P = Pixels> {
+    pub data: CelCommon,
+    pub content: CelContent<P>,
     pub user_data: Option<UserData>,
 }
 
 fn parse_raw_cel<R: Read>(
     mut reader: AseReader<R>,
     pixel_format: PixelFormat,
-) -> Result<ImageContent> {
+) -> Result<ImageContent<RawPixels>> {
     let size = ImageSize::parse(&mut reader)?;
-    Pixels::from_raw(reader, pixel_format, size.pixel_count())
+    RawPixels::from_raw(reader, pixel_format, size.pixel_count())
         .map(|pixels| ImageContent { size, pixels })
 }
 
 fn parse_compressed_cel<R: Read>(
     mut reader: AseReader<R>,
     pixel_format: PixelFormat,
-) -> Result<ImageContent> {
+) -> Result<ImageContent<RawPixels>> {
     let size = ImageSize::parse(&mut reader)?;
-    Pixels::from_compressed(reader, pixel_format, size.pixel_count())
+    RawPixels::from_compressed(reader, pixel_format, size.pixel_count())
         .map(|pixels| ImageContent { size, pixels })
 }
 
-pub(crate) fn parse_chunk(data: &[u8], pixel_format: PixelFormat) -> Result<RawCel> {
+pub(crate) fn parse_chunk(data: &[u8], pixel_format: PixelFormat) -> Result<RawCel<RawPixels>> {
     let mut reader = AseReader::new(&data);
-    let data = CelData::parse(&mut reader)?;
+    let data = CelCommon::parse(&mut reader)?;
     let cel_type = reader.word()?;
     reader.skip_reserved(7)?;
 

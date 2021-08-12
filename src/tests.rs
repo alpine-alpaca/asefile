@@ -24,9 +24,13 @@ fn compare_with_reference_image(img: image::RgbaImage, filename: &str) {
     actual_path.push(format!("{}.actual.png", filename));
     let ref_image = image::open(&reference_path).unwrap();
     let ref_rgba = ref_image.to_rgba8();
+    println!("Loaded reference image: {}", reference_path.display());
 
+    // dbg!(img.dimensions(), ref_rgba.dimensions());
     assert_eq!(img.dimensions(), ref_rgba.dimensions());
+    println!("saving image");
     img.save(&actual_path).unwrap();
+    println!("done saving");
 
     for (x, y, expected_color) in ref_rgba.enumerate_pixels() {
         let actual_color = img.get_pixel(x, y);
@@ -398,6 +402,19 @@ fn tileset_export() {
     let img = f.tileset_image(tileset.id()).unwrap();
 
     compare_with_reference_image(img, "tileset");
+}
+
+#[test]
+fn tileset_export_single() {
+    let f = load_test_file("tileset");
+    let tileset = f
+        .tilesets()
+        .get(tileset::TilesetId::from_raw(0))
+        .expect("No tileset found");
+
+    let img = tileset.tile_image(1);
+
+    compare_with_reference_image(img, "tileset_1");
 }
 
 #[test]

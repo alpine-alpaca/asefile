@@ -1,6 +1,7 @@
 use crate::cel::CelId;
 use crate::external_file::{ExternalFile, ExternalFilesById};
 use crate::layer::{LayerData, LayersData};
+use crate::pixel::{Pixels, RawPixels};
 use crate::reader::AseReader;
 use crate::slice::Slice;
 use crate::tileset::{Tileset, TilesetsById};
@@ -8,19 +9,20 @@ use crate::user_data::UserData;
 use crate::{error::AsepriteParseError, AsepriteFile, PixelFormat};
 use log::debug;
 use std::io::Read;
+use std::sync::Arc;
 
 use crate::Result;
 use crate::{cel, color_profile, layer, palette, slice, tags, user_data, Tag};
 
 struct ParseInfo {
-    palette: Option<palette::ColorPalette>,
+    palette: Option<Arc<palette::ColorPalette>>,
     color_profile: Option<color_profile::ColorProfile>,
     layers: Vec<LayerData>,
-    framedata: cel::CelsData, // Vec<Vec<cel::RawCel>>,
+    framedata: cel::CelsData<RawPixels>, // Vec<Vec<cel::RawCel>>,
     frame_times: Vec<u16>,
     tags: Option<Vec<Tag>>,
     external_files: ExternalFilesById,
-    tilesets: TilesetsById,
+    tilesets: TilesetsById<RawPixels>,
     sprite_user_data: Option<UserData>,
     user_data_context: Option<UserDataContext>,
     slices: Vec<Slice>,
@@ -42,7 +44,8 @@ impl ParseInfo {
             slices: Vec::new(),
         }
     }
-    fn add_cel(&mut self, frame_id: u16, cel: cel::RawCel) -> Result<()> {
+
+    fn add_cel(&mut self, frame_id: u16, cel: cel::RawCel<RawPixels>) -> Result<()> {
         let cel_id = CelId {
             frame: frame_id,
             layer: cel.data.layer_index,
@@ -51,20 +54,24 @@ impl ParseInfo {
         self.user_data_context = Some(UserDataContext::CelId(cel_id));
         Ok(())
     }
+
     fn add_layer(&mut self, layer_data: LayerData) {
         let idx = self.layers.len();
         self.layers.push(layer_data);
         self.user_data_context = Some(UserDataContext::LayerIndex(idx as u32));
     }
+
     fn add_tags(&mut self, tags: Vec<Tag>) {
         self.tags = Some(tags);
         self.user_data_context = Some(UserDataContext::TagIndex(0));
     }
+
     fn add_external_files(&mut self, files: Vec<ExternalFile>) {
         for external_file in files {
             self.external_files.add(external_file);
         }
     }
+
     fn set_tag_user_data(&mut self, user_data: UserData, tag_index: u16) -> Result<()> {
         let tags = self.tags.as_mut().ok_or_else(|| {
             AsepriteParseError::InternalError(
@@ -81,6 +88,7 @@ impl ParseInfo {
         self.user_data_context = Some(UserDataContext::TagIndex(tag_index + 1));
         Ok(())
     }
+
     fn add_user_data(&mut self, user_data: UserData) -> Result<()> {
         let user_data_context = self.user_data_context.ok_or_else(|| {
             AsepriteParseError::InvalidInput(
@@ -125,11 +133,13 @@ impl ParseInfo {
         }
         Ok(())
     }
+
     fn add_slice(&mut self, slice: Slice) {
         let context_idx = self.slices.len();
         self.slices.push(slice);
         self.user_data_context = Some(UserDataContext::SliceIndex(context_idx as u32));
     }
+
     // Validate moves the ParseInfo data into an intermediate ValidatedParseInfo struct,
     // which is then used to create the AsepriteFile.
     fn validate(self, pixel_format: &PixelFormat) -> Result<ValidatedParseInfo> {
@@ -137,11 +147,13 @@ impl ParseInfo {
 
         let tilesets = self.tilesets;
         let palette = self.palette;
-        tilesets.validate(pixel_format, &palette)?;
+        let tilesets = tilesets.validate(pixel_format, palette.clone())?;
         layers.validate(&tilesets)?;
 
-        let framedata = self.framedata;
-        framedata.validate(&layers, palette.as_ref())?;
+        //let framedata = self.framedata;
+        let framedata = self
+            .framedata
+            .validate(&layers, pixel_format, palette.clone())?;
 
         Ok(ValidatedParseInfo {
             layers,
@@ -160,9 +172,9 @@ impl ParseInfo {
 struct ValidatedParseInfo {
     layers: layer::LayersData,
     tilesets: TilesetsById,
-    framedata: cel::CelsData,
+    framedata: cel::CelsData<Pixels>,
     external_files: ExternalFilesById,
-    palette: Option<palette::ColorPalette>,
+    palette: Option<Arc<palette::ColorPalette>>,
     tags: Vec<Tag>,
     frame_times: Vec<u16>,
     sprite_user_data: Option<UserData>,
@@ -286,7 +298,7 @@ fn parse_frame<R: Read>(
             }
             ChunkType::Palette => {
                 let palette = palette::parse_chunk(&data)?;
-                parse_info.palette = Some(palette);
+                parse_info.palette = Some(Arc::new(palette));
             }
             ChunkType::Layer => {
                 let layer_data = layer::parse_chunk(&data)?;
@@ -326,7 +338,7 @@ fn parse_frame<R: Read>(
                 // parse_info.sprite_user_data = &data.user_data;
             }
             ChunkType::Tileset => {
-                let tileset = Tileset::parse_chunk(&data, pixel_format)?;
+                let tileset = Tileset::<RawPixels>::parse_chunk(&data, pixel_format)?;
                 parse_info.tilesets.add(tileset);
             }
             ChunkType::CelExtra | ChunkType::Mask | ChunkType::Path => {

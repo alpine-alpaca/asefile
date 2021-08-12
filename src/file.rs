@@ -2,13 +2,15 @@ use std::{
     fs::File,
     io::{BufReader, Read},
     path::Path,
+    sync::Arc,
 };
 
 use crate::{
     blend::{self, Color8},
-    cel::{CelData, CelId, CelsData, ImageContent, ImageSize},
+    cel::{CelCommon, CelId, CelsData, ImageContent, ImageSize},
     external_file::{ExternalFile, ExternalFileId, ExternalFilesById},
     layer::{Layer, LayerType, LayersData},
+    pixel::Pixels,
     slice::Slice,
     tile::TileId,
     tilemap::Tilemap,
@@ -26,12 +28,13 @@ pub struct AsepriteFile {
     pub(crate) height: u16,
     pub(crate) num_frames: u16,
     pub(crate) pixel_format: PixelFormat,
-    pub(crate) palette: Option<ColorPalette>,
+    // palette is an Arc because every chunk of pixel data will reference it (read-only).
+    pub(crate) palette: Option<Arc<ColorPalette>>,
     pub(crate) layers: LayersData,
     // pub(crate) color_profile: Option<ColorProfile>,
     pub(crate) frame_times: Vec<u16>,
     pub(crate) tags: Vec<Tag>,
-    pub(crate) framedata: CelsData, // Vec<Vec<cel::RawCel>>,
+    pub(crate) framedata: CelsData<Pixels>, // Vec<Vec<cel::RawCel>>,
     pub(crate) external_files: ExternalFilesById,
     pub(crate) tilesets: TilesetsById,
     pub(crate) sprite_user_data: Option<UserData>,
@@ -131,7 +134,7 @@ impl AsepriteFile {
     /// cels. However, the final image after layer blending may contain colors
     /// outside of this palette (or with different transparency levels).
     pub fn palette(&self) -> Option<&ColorPalette> {
-        self.palette.as_ref()
+        self.palette.as_deref()
     }
 
     /// Access a layer by ID.
@@ -222,7 +225,9 @@ impl AsepriteFile {
     }
 
     /// Construct the image of each tile in the [Tileset].
-    /// The image has width equal to the tile width and height equal to (tile_height * tile_count).
+    ///
+    /// The image has width equal to the tile width and height equal to
+    /// `tile_height * tile_count`.
     pub fn tileset_image(
         &self,
         tileset_id: TilesetId,
@@ -231,18 +236,7 @@ impl AsepriteFile {
             .tilesets
             .get(tileset_id)
             .ok_or_else(|| TilesetImageError::MissingTilesetId(tileset_id))?;
-        let pixels = tileset
-            .pixels
-            .as_ref()
-            .ok_or_else(|| TilesetImageError::NoPixelsInTileset(tileset_id))?;
-        let resolver_data = pixel::IndexResolverData {
-            palette: self.palette.as_ref(),
-            transparent_color_index: self.pixel_format.transparent_color_index(),
-            layer_is_background: false,
-        };
-        let image_pixels = pixels.clone_as_image_rgba(resolver_data);
-
-        Ok(tileset.write_to_image(image_pixels.as_ref()))
+        Ok(tileset.image())
     }
 
     /// The user data for the entire sprite, if any exists.
@@ -279,19 +273,19 @@ impl AsepriteFile {
         image
     }
 
-    fn write_cel(&self, image: &mut RgbaImage, cel: &RawCel) {
+    fn write_cel(&self, image: &mut RgbaImage, cel: &RawCel<Pixels>) {
         let RawCel { data, content, .. } = cel;
         let layer = self.layer(data.layer_index as u32);
         let blend_mode = layer.blend_mode();
-        let resolver_data = pixel::IndexResolverData {
-            palette: self.palette.as_ref(),
-            transparent_color_index: self.pixel_format.transparent_color_index(),
-            layer_is_background: self.layers[layer.id()].is_background(),
-        };
+        // let resolver_data = pixel::IndexResolverData {
+        //     palette: self.palette.as_ref(),
+        //     transparent_color_index: self.pixel_format.transparent_color_index(),
+        //     layer_is_background: self.layers[layer.id()].is_background(),
+        // };
         match &content {
             CelContent::Raw(image_content) => {
                 let ImageContent { size, pixels } = image_content;
-                let image_pixels = pixels.clone_as_image_rgba(resolver_data);
+                let image_pixels = pixels.clone_as_image_rgba();
 
                 write_raw_cel_to_image(image, data, size, image_pixels.as_ref(), &blend_mode);
             }
@@ -312,7 +306,7 @@ impl AsepriteFile {
                     .pixels
                     .as_ref()
                     .expect("Expected Tileset data to contain pixels. Should have been caught by TilesetsById::validate()");
-                let rgba_pixels = tileset_pixels.clone_as_image_rgba(resolver_data);
+                let rgba_pixels = tileset_pixels.clone_as_image_rgba();
 
                 write_tilemap_cel_to_image(
                     image,
@@ -442,13 +436,13 @@ fn tile_slice<'a, T>(pixels: &'a [T], tile_size: &TileSize, tile_id: &TileId) ->
 
 fn write_tilemap_cel_to_image(
     image: &mut RgbaImage,
-    cel_data: &CelData,
+    cel_data: &CelCommon,
     tilemap_data: &Tilemap,
     tileset: &Tileset,
     pixels: &[Rgba<u8>],
     blend_mode: &BlendMode,
 ) {
-    let CelData { x, y, opacity, .. } = cel_data;
+    let CelCommon { x, y, opacity, .. } = cel_data;
     let cel_x = *x as i32;
     let cel_y = *y as i32;
     // tilemap dimensions
@@ -494,13 +488,13 @@ fn write_tilemap_cel_to_image(
 
 fn write_raw_cel_to_image(
     image: &mut RgbaImage,
-    cel_data: &CelData,
+    cel_data: &CelCommon,
     image_size: &ImageSize,
     pixels: &[Rgba<u8>],
     blend_mode: &BlendMode,
 ) {
     let ImageSize { width, height } = image_size;
-    let CelData { x, y, opacity, .. } = cel_data;
+    let CelCommon { x, y, opacity, .. } = cel_data;
     let blend_fn = blend_mode_to_blend_fn(*blend_mode);
     let x0 = *x as i32;
     let y0 = *y as i32;

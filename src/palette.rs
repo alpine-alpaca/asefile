@@ -1,4 +1,4 @@
-use crate::{pixel, reader::AseReader, AsepriteParseError, Result};
+use crate::{reader::AseReader, AsepriteParseError, Result};
 use nohash::IntMap;
 
 /// The color palette embedded in the file.
@@ -31,15 +31,15 @@ impl ColorPalette {
         self.entries.get(&index)
     }
 
-    pub(crate) fn validate_indexed_pixels(&self, indexed_pixels: &[pixel::Indexed]) -> Result<()> {
+    pub(crate) fn validate_indexed_pixels(&self, indexed_pixels: &[u8]) -> Result<()> {
+        // TODO: Make way more efficient at least for the common case where
+        // the palette goes from `0..num_colors`. Just search for a value >=
+        // num_colors. Maybe make palette an enum and discover dense format
+        // after parsing.
         for pixel in indexed_pixels {
-            let color = self.color(pixel.value().into());
+            let color = self.color(*pixel as u32);
             color.ok_or_else(|| {
-                AsepriteParseError::InvalidInput(format!(
-                    "Index out of range: {} (max: {})",
-                    pixel.value(),
-                    self.num_colors()
-                ))
+                AsepriteParseError::InvalidInput(format!("Palette index invalid: {}", pixel,))
             })?;
         }
         Ok(())

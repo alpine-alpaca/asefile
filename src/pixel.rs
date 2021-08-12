@@ -1,7 +1,7 @@
 use image::{Pixel, Rgba};
 
 use crate::{reader::AseReader, AsepriteParseError, ColorPalette, PixelFormat, Result};
-use std::{borrow::Cow, io::Read};
+use std::{borrow::Cow, io::Read, sync::Arc};
 
 // From Aseprite file spec:
 // PIXEL: One pixel, depending on the image pixel format:
@@ -19,7 +19,7 @@ fn read_rgba(chunk: &[u8]) -> Result<Rgba<u8>> {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct Grayscale {
+pub struct Grayscale {
     value: u8,
     alpha: u8,
 }
@@ -39,7 +39,7 @@ impl Grayscale {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct Indexed(u8);
+pub(crate) struct Indexed(pub(crate) u8);
 
 impl Indexed {
     pub(crate) fn value(&self) -> u8 {
@@ -69,18 +69,32 @@ fn output_size(pixel_format: PixelFormat, expected_pixel_count: usize) -> usize 
 }
 
 #[derive(Debug)]
-pub(crate) enum Pixels {
+pub enum Pixels {
     Rgba(Vec<Rgba<u8>>),
     Grayscale(Vec<Grayscale>),
-    Indexed(Vec<Indexed>),
+    Indexed {
+        palette: Arc<ColorPalette>,
+        transparent_color_index: u8,
+        layer_is_background: bool,
+        data: Vec<u8>,
+    },
 }
 
-impl Pixels {
+#[derive(Debug)]
+pub(crate) enum RawPixels {
+    Rgba(Vec<Rgba<u8>>),
+    Grayscale(Vec<Grayscale>),
+    Indexed(Vec<u8>),
+}
+
+impl RawPixels {}
+
+impl RawPixels {
     fn from_bytes(bytes: Vec<u8>, pixel_format: PixelFormat) -> Result<Self> {
         match pixel_format {
             PixelFormat::Indexed { .. } => {
-                let pixels = bytes.iter().map(|byte| Indexed(*byte)).collect();
-                Ok(Self::Indexed(pixels))
+                //let pixels = bytes.iter().map(|byte| Indexed(*byte)).collect();
+                Ok(Self::Indexed(bytes))
             }
             PixelFormat::Grayscale => {
                 if bytes.len() % 2 != 0 {
@@ -127,45 +141,75 @@ impl Pixels {
 
     pub(crate) fn byte_count(&self) -> usize {
         match self {
-            Pixels::Rgba(v) => v.len() * 4,
-            Pixels::Grayscale(v) => v.len() * 2,
-            Pixels::Indexed(v) => v.len(),
+            RawPixels::Rgba(v) => v.len() * 4,
+            RawPixels::Grayscale(v) => v.len() * 2,
+            RawPixels::Indexed(v) => v.len(),
         }
     }
 
-    // Returns a Borrowed Cow if the Pixels struct already contains Rgba pixels.
-    // Otherwise clones them to create an Owned Cow.
-    pub(crate) fn clone_as_image_rgba(
-        &self,
-        index_resolver_data: IndexResolverData<'_>,
-    ) -> Cow<Vec<image::Rgba<u8>>> {
+    pub(crate) fn validate(
+        self,
+        palette: Option<Arc<ColorPalette>>,
+        pixel_format: &PixelFormat,
+        layer_is_background: bool,
+    ) -> Result<Pixels> {
         match self {
-            Pixels::Rgba(rgba) => Cow::Borrowed(rgba),
-            Pixels::Grayscale(grayscale) => {
-                Cow::Owned(grayscale.iter().map(|gs| gs.into_rgba()).collect())
-            }
-            Pixels::Indexed(indexed) => {
-                let IndexResolverData {
-                    palette,
-                    transparent_color_index,
-                    layer_is_background,
-                } = index_resolver_data;
-                let palette = palette.expect("Expected a palette when resolving indexed pixels.  Should have been caught in validation");
-                let transparent_color_index = transparent_color_index.expect(
-                    "Indexed tilemap pixels in non-indexed pixel format. Should have been caught in validation",
-                );
-                let resolver = |px: &Indexed| {
-                    px.as_rgba(palette, transparent_color_index, layer_is_background)
-                        .expect("Indexed pixel out of range. Should have been caught in validation")
-                };
-                Cow::Owned(indexed.iter().map(resolver).collect())
+            RawPixels::Rgba(data) => Ok(Pixels::Rgba(data)),
+            RawPixels::Grayscale(data) => Ok(Pixels::Grayscale(data)),
+            RawPixels::Indexed(data) => {
+                if let Some(palette) = palette {
+                    palette.validate_indexed_pixels(&data)?;
+                    if let PixelFormat::Indexed {
+                        transparent_color_index,
+                    } = pixel_format
+                    {
+                        Ok(Pixels::Indexed {
+                            palette,
+                            transparent_color_index: *transparent_color_index,
+                            layer_is_background,
+                            data,
+                        })
+                    } else {
+                        return Err(AsepriteParseError::InvalidInput(format!(
+                            "File pixel format ({:?}) does not match data pixel format: indexed",
+                            pixel_format
+                        )));
+                    }
+                } else {
+                    return Err(AsepriteParseError::InvalidInput(
+                        "Indexed colors without a palette".to_string(),
+                    ));
+                }
             }
         }
     }
 }
 
-pub(crate) struct IndexResolverData<'a> {
-    pub(crate) palette: Option<&'a ColorPalette>,
-    pub(crate) transparent_color_index: Option<u8>,
-    pub(crate) layer_is_background: bool,
+impl Pixels {
+    // Returns a Borrowed Cow if the Pixels struct already contains Rgba pixels.
+    // Otherwise clones them to create an Owned Cow.
+    pub(crate) fn clone_as_image_rgba(&self) -> Cow<Vec<image::Rgba<u8>>> {
+        match self {
+            Pixels::Rgba(rgba) => Cow::Borrowed(rgba),
+            Pixels::Grayscale(grayscale) => {
+                Cow::Owned(grayscale.iter().map(|gs| gs.into_rgba()).collect())
+            }
+            Pixels::Indexed {
+                palette,
+                transparent_color_index,
+                layer_is_background,
+                data,
+            } => {
+                //let palette = palette.expect("Expected a palette when resolving indexed pixels.  Should have been caught in validation");
+                // let transparent_color_index = transparent_color_index.expect(
+                //     "Indexed tilemap pixels in non-indexed pixel format. Should have been caught in validation",
+                // );
+                let resolver = |px: &Indexed| {
+                    px.as_rgba(palette, *transparent_color_index, *layer_is_background)
+                        .expect("Indexed pixel out of range. Should have been caught in validation")
+                };
+                Cow::Owned(data.iter().map(|p| resolver(&Indexed(*p))).collect())
+            }
+        }
+    }
 }
