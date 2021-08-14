@@ -82,12 +82,14 @@ multiple ways to access a cel:
 ```
 # use asefile::AsepriteFile;
 # use std::path::Path;
-# let path = Path::new("./tests/data/basic-16x16.aseprite");
+# let path = Path::new("./tests/data/layers_and_tags.aseprite");
 # let ase = AsepriteFile::read_file(&path).unwrap();
 
 let layer0 = ase.layer(0);
-let cel1 = layer0.frame(0);
-let cel2 = ase.frame(0).layer(0);
+// These are all the same cel
+let cel1 = layer0.frame(1);
+let cel2 = ase.frame(1).layer(0);
+let cel3 = ase.cel(1, 0); // or directly, which can avoid some borrowing issues
 
 let image = cel1.image();
 ```
@@ -111,7 +113,7 @@ let tileset = ase.tilesets().get(0).unwrap();
 
 let all_tiles: RgbaImage = tileset.image();
 let single_tile: RgbaImage = tileset.tile_image(1);
-// Note: tile 0 is usually the empty tile
+// Note: tile 0 is the empty tile
 assert_eq!(
     all_tiles.dimensions().0,
     tileset.tile_size().width() as u32
@@ -131,8 +133,34 @@ You can export those layers as a single large image or you can do some custom
 processing by looking at the tile indexes in the layer.
 
 ```
-// todo!()
+# use asefile::AsepriteFile;
+# use std::path::Path;
+# use image::RgbaImage;
+# let path = Path::new("./tests/data/tilemap_multi.aseprite");
+# let ase = AsepriteFile::read_file(&path).unwrap();
+
+let layer = ase.layer_by_name("Tilemap 1").unwrap().id();
+let tilemap = ase.tilemap(layer, 0).unwrap();
+
+// This is the same as getting the image for the cel.
+let tilemap_image = tilemap.image();
+
+let num_tiles_x = tilemap.width();
+let num_tiles_y = tilemap.height();
+let (tile_width, tile_height) = tilemap.tile_size();
+// Get a specific tile. Always succeeds. If the tile is out of bounds returns
+// the empty tile (id 0).
+let tile = tilemap.tile(0, 1);
+println!("tile at (0, 1) references tile from tileset: {}", tile.id());
+// You can access the tileset right through the tilemap.
+let image = tilemap.tileset().tile_image(tile.id());
 ```
+
+## User data
+
+Aseprite gives you the option to annotate certain entities with custom data.
+Usually, that's a color and a text field. Each of those entities has a
+`user_data()` method.
 
 */
 
@@ -168,5 +196,7 @@ pub use layer::{BlendMode, Layer, LayerFlags};
 pub use palette::{ColorPalette, ColorPaletteEntry};
 pub use slice::{Slice, Slice9, SliceKey, SliceOrigin, SlicePivot, SliceSize};
 pub use tags::{AnimationDirection, Tag};
+pub use tile::Tile;
+pub use tilemap::Tilemap;
 pub use tileset::{ExternalTilesetReference, TileSize, Tileset, TilesetImageError, TilesetsById};
 pub use user_data::UserData;

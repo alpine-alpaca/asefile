@@ -91,6 +91,14 @@ impl<'a> Layer<'a> {
         self.data().layer_type
     }
 
+    /// Is this a tilemap layer?
+    pub fn is_tilemap(&self) -> bool {
+        match self.layer_type() {
+            LayerType::Tilemap(_) => true,
+            _ => false,
+        }
+    }
+
     /// The parent of this layer, if any. For layers that are part of a group
     /// this returns the parent layer.
     ///

@@ -24,13 +24,13 @@ fn compare_with_reference_image(img: image::RgbaImage, filename: &str) {
     actual_path.push(format!("{}.actual.png", filename));
     let ref_image = image::open(&reference_path).unwrap();
     let ref_rgba = ref_image.to_rgba8();
-    println!("Loaded reference image: {}", reference_path.display());
+    // println!("Loaded reference image: {}", reference_path.display());
 
     // dbg!(img.dimensions(), ref_rgba.dimensions());
     assert_eq!(img.dimensions(), ref_rgba.dimensions());
-    println!("saving image");
+    // println!("saving image");
     img.save(&actual_path).unwrap();
-    println!("done saving");
+    // println!("done saving");
 
     for (x, y, expected_color) in ref_rgba.enumerate_pixels() {
         let actual_color = img.get_pixel(x, y);
@@ -400,6 +400,43 @@ fn tileset_export_single() {
     let img = tileset.tile_image(1);
 
     compare_with_reference_image(img, "tileset_1");
+}
+
+#[test]
+fn tileset_multi() {
+    let f = load_test_file("tilemap_multi");
+    //let tileset = f.tilesets().get(0).expect("No tileset found");
+    let img = f.frame(0).image();
+    compare_with_reference_image(img, "tilemap_multi");
+
+    let tilemap = f.layer_by_name("Tilemap 1").unwrap();
+    let img = tilemap.frame(0).image();
+    compare_with_reference_image(img, "tilemap_multi_map1");
+
+    let tilemap = f.layer_by_name("Tilemap 2").unwrap();
+    let img = tilemap.frame(0).image();
+    compare_with_reference_image(img, "tilemap_multi_map2");
+}
+
+#[test]
+fn tileset_single_tile() {
+    let f = load_test_file("tilemap_multi");
+    let map_layer = f.layer_by_name("Tilemap 1").unwrap().id();
+    let tilemap = f.tilemap(map_layer, 0).unwrap();
+
+    dbg!(tilemap.tile_offsets());
+    assert_eq!(tilemap.width(), 13);
+    assert_eq!(tilemap.height(), 16);
+
+    assert_eq!(tilemap.tile(0, 0).id(), 0);
+    assert_eq!(tilemap.tile(0, 2).id(), 4);
+    assert_eq!(tilemap.tile(0, 3).id(), 2);
+    assert_eq!(tilemap.tile(11, 5).id(), 3);
+    assert_eq!(tilemap.tile(12, 15).id(), 0);
+    assert_eq!(tilemap.tile(4, 7).id(), 3);
+
+    let img = tilemap.tileset().tile_image(3);
+    compare_with_reference_image(img, "tilemap_single_tile_1");
 }
 
 #[test]

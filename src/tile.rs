@@ -1,19 +1,32 @@
 use crate::{reader::AseReader, tilemap::TileBitmaskHeader, Result};
 use std::{io::Read, ops::Index};
 
-#[derive(Debug, Clone, Copy)]
-pub struct TileId(pub u32);
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub(crate) struct TileId(pub u32);
 
 /// A tile is a reference to a single tile in a tilemap.
 #[derive(Debug, Clone)]
 pub struct Tile {
-    pub id: TileId,
-    pub flip_x: bool,
-    pub flip_y: bool,
-    pub rotate_90cw: bool,
+    pub(crate) id: TileId,
+    // These are currently (Aseprite v1.3-beta5) not supported by the GUI.
+    pub(crate) flip_x: bool,
+    pub(crate) flip_y: bool,
+    pub(crate) rotate_90cw: bool,
 }
 
+pub(crate) static EMPTY_TILE: Tile = Tile {
+    id: TileId(0),
+    flip_x: false,
+    flip_y: false,
+    rotate_90cw: false,
+};
+
 impl Tile {
+    /// The ID of the tile, i.e., the index into the corresponding tileset.
+    pub fn id(&self) -> u32 {
+        self.id.0
+    }
+
     pub(crate) fn new(chunk: &[u8], header: &TileBitmaskHeader) -> Result<Self> {
         AseReader::new(chunk)
             .dword()

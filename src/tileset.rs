@@ -79,6 +79,12 @@ pub struct TileSize {
     height: u16,
 }
 
+impl Into<(u32, u32)> for TileSize {
+    fn into(self) -> (u32, u32) {
+        (self.width as u32, self.height as u32)
+    }
+}
+
 impl TileSize {
     /// Tile width in pixels.
     pub fn width(&self) -> u16 {
@@ -244,7 +250,7 @@ impl Tileset<Pixels> {
     }
 }
 
-/// A map from [TilesetId]s to [Tileset]s.
+/// A map from tileset ids (`u32`) to [Tileset]s.
 #[derive(Debug)]
 pub struct TilesetsById<P = Pixels>(HashMap<TilesetId, Tileset<P>>);
 

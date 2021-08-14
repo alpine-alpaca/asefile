@@ -1,7 +1,7 @@
 use crate::layer::LayerType;
 use crate::pixel::{Pixels, RawPixels};
 use crate::reader::AseReader;
-use crate::tilemap::Tilemap;
+use crate::tilemap::TilemapData;
 use crate::user_data::UserData;
 use crate::{
     layer::LayersData, AsepriteFile, AsepriteParseError, ColorPalette, PixelFormat, Result,
@@ -36,12 +36,48 @@ impl<'a> Cel<'a> {
         self.file.framedata.cel(self.cel_id).is_some()
     }
 
+    /// The frame coordinate of this cel.
+    pub fn frame(&self) -> u32 {
+        self.cel_id.frame as u32
+    }
+
+    /// The layer coordinate of this cel.
+    pub fn layer(&self) -> u32 {
+        self.cel_id.layer as u32
+    }
+
     /// Returns the cel's user data, if any is present.
     pub fn user_data(&self) -> Option<&UserData> {
         self.file
             .framedata
             .cel(self.cel_id)
             .and_then(|c| c.user_data.as_ref())
+    }
+
+    /// Top-left corner of the non-empty rectangular area of the cel.
+    ///
+    /// In other words, the first component is the smallest x coordinate of a
+    /// non-empty pixel. And the second is the same for y.
+    ///
+    /// These may be negative or outside of the visible area. This can happen if
+    /// you drag a layer around.
+    pub fn top_left(&self) -> (i32, i32) {
+        self.raw_cel()
+            .map_or_else(|| (0, 0), |raw| (raw.data.x as i32, raw.data.y as i32))
+    }
+
+    /// Does this cel include a tilemap.
+    pub fn is_tilemap(&self) -> bool {
+        if let Some(raw) = self.raw_cel() {
+            if let CelContent::Tilemap(_) = raw.content {
+                return true;
+            }
+        }
+        false
+    }
+
+    pub(crate) fn raw_cel(&self) -> Option<&RawCel> {
+        self.file.framedata.cel(self.cel_id)
     }
 }
 
@@ -336,7 +372,7 @@ impl ImageContent<RawPixels> {
 pub(crate) enum CelContent<P> {
     Raw(ImageContent<P>),
     Linked(u16),
-    Tilemap(Tilemap),
+    Tilemap(TilemapData),
 }
 
 impl<P> CelContent<P> {
@@ -358,7 +394,7 @@ impl CelContent<RawPixels> {
             0 => parse_raw_cel(reader, pixel_format).map(CelContent::Raw),
             1 => reader.word().map(CelContent::Linked),
             2 => parse_compressed_cel(reader, pixel_format).map(CelContent::Raw),
-            3 => Tilemap::parse_chunk(reader).map(CelContent::Tilemap),
+            3 => TilemapData::parse_chunk(reader).map(CelContent::Tilemap),
             _ => Err(AsepriteParseError::InvalidInput(format!(
                 "Invalid/Unsupported Cel type: {}",
                 cel_type

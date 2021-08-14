@@ -13,7 +13,7 @@ use crate::{
     pixel::Pixels,
     slice::Slice,
     tile::TileId,
-    tilemap::Tilemap,
+    tilemap::{Tilemap, TilemapData},
     tileset::{TileSize, Tileset, TilesetsById},
     user_data::UserData,
 };
@@ -182,6 +182,25 @@ impl AsepriteFile {
         Frame { file: self, index }
     }
 
+    /// Get a direct reference to a [Cel].
+    ///
+    /// Argument order is `x, y` if you think of the timeline panel in the GUI.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `frame` is not less than `num_frames` or if `layer` is not
+    /// less than `num_layers`.
+    pub fn cel(&self, frame: u32, layer: u32) -> Cel {
+        assert!(frame < self.num_frames as u32 && layer < self.num_layers());
+        Cel {
+            file: self,
+            cel_id: CelId {
+                frame: frame as u16,
+                layer: layer as u16,
+            },
+        }
+    }
+
     /// A mapping from external file ids to external files.
     pub fn external_files(&self) -> &ExternalFilesById {
         &self.external_files
@@ -222,6 +241,36 @@ impl AsepriteFile {
     /// Access the file's [Tileset]s.
     pub fn tilesets(&self) -> &TilesetsById {
         &self.tilesets
+    }
+
+    /// Get the [Tilemap] at the given cel.
+    ///
+    /// Returns `None` if the cel is empty or if it is not a tilemap.
+    pub fn tilemap<'a>(&'a self, layer_id: u32, frame: u32) -> Option<Tilemap<'a>> {
+        if layer_id >= self.num_layers() || frame >= self.num_frames() {
+            return None;
+        }
+        match self.layer(layer_id).layer_type() {
+            LayerType::Tilemap(tileset_id) => {
+                let tileset = self.tilesets().get(tileset_id)?;
+                let cel = self.cel(frame, layer_id);
+                if !cel.is_tilemap() {
+                    return None;
+                }
+                let pixel_width = self.width() as u32;
+                let pixel_height = self.height() as u32;
+                let (tile_width, tile_height) = tileset.tile_size().into();
+                let w = (pixel_width + tile_width - 1) / tile_width;
+                let h = (pixel_height + tile_height - 1) / tile_height;
+                assert!(w < (1u32 << 16) && h < (1u32 << 16));
+                Some(Tilemap {
+                    cel,
+                    tileset,
+                    logical_size: (w as u16, h as u16),
+                })
+            }
+            LayerType::Image | LayerType::Group => None,
+        }
     }
 
     /// The user data for the entire sprite, if any exists.
@@ -366,6 +415,11 @@ impl<'a> Frame<'a> {
         self.file.frame_image(self.index as u16)
     }
 
+    /// Frame ID, i.e., the frame number.
+    pub fn id(&self) -> u32 {
+        self.index
+    }
+
     /// Get cel corresponding to the given layer in this frame.
     pub fn layer(&self, layer_id: u32) -> Cel {
         assert!(layer_id < self.file.num_layers());
@@ -422,7 +476,7 @@ fn tile_slice<'a, T>(pixels: &'a [T], tile_size: &TileSize, tile_id: &TileId) ->
 fn write_tilemap_cel_to_image(
     image: &mut RgbaImage,
     cel_data: &CelCommon,
-    tilemap_data: &Tilemap,
+    tilemap_data: &TilemapData,
     tileset: &Tileset,
     pixels: &[Rgba<u8>],
     blend_mode: &BlendMode,
