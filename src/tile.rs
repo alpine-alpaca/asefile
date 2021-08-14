@@ -5,6 +5,10 @@ use std::{io::Read, ops::Index};
 pub(crate) struct TileId(pub u32);
 
 /// A tile is a reference to a single tile in a tilemap.
+///
+/// Note that the Aseprite file format also enables rotating or flipping tiles.
+/// But since the GUI does not yet support those (as of v1.3-beta5) we do not
+/// yet expose these attributes.
 #[derive(Debug, Clone)]
 pub struct Tile {
     pub(crate) id: TileId,

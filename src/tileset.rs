@@ -233,7 +233,7 @@ impl Tileset<Pixels> {
     /// Collect all tiles into one long vertical image.
     ///
     /// The image has width equal to the tile width and height equal to
-    /// `tile_height * tile_count`.
+    /// `tile_size().width() * tile_count()`.
     pub fn image(&self) -> RgbaImage {
         let width = self.tile_size.width() as u32;
         let tile_height = self.tile_size.height() as u32;

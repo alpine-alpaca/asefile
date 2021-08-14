@@ -2,7 +2,7 @@ use std::io::Read;
 
 use crate::{reader::AseReader, user_data::UserData, Result};
 
-/// A slice is a region of the sprite with a name and optional [UserData].
+/// A slice is a region of the sprite with some attributes.
 ///
 /// See [official docs on slices](https://www.aseprite.org/docs/slices/) for
 /// details.
