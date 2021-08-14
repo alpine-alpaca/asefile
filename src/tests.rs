@@ -355,10 +355,7 @@ fn tilemap() {
     let f = load_test_file("tilemap");
     let img = f.frame(0).image();
     assert_eq!(f.size(), (32, 32));
-    let ts = f
-        .tilesets()
-        .get(tileset::TilesetId::from_raw(0))
-        .expect("No tileset found");
+    let ts = f.tilesets().get(0).expect("No tileset found");
     assert_eq!(ts.name(), "test_tileset");
 
     compare_with_reference_image(img, "tilemap");
@@ -369,10 +366,7 @@ fn tilemap_indexed() {
     let f = load_test_file("tilemap_indexed");
     let img = f.frame(0).image();
     assert_eq!(f.size(), (32, 32));
-    let ts = f
-        .tilesets()
-        .get(tileset::TilesetId::from_raw(0))
-        .expect("No tileset found");
+    let ts = f.tilesets().get(0).expect("No tileset found");
     assert_eq!(ts.name(), "test_tileset");
 
     compare_with_reference_image(img, "tilemap_indexed");
@@ -383,10 +377,7 @@ fn tilemap_grayscale() {
     let f = load_test_file("tilemap_grayscale");
     let img = f.frame(0).image();
     assert_eq!(f.size(), (32, 32));
-    let ts = f
-        .tilesets()
-        .get(tileset::TilesetId::from_raw(0))
-        .expect("No tileset found");
+    let ts = f.tilesets().get(0).expect("No tileset found");
     assert_eq!(ts.name(), "test_tileset");
 
     compare_with_reference_image(img, "tilemap_grayscale");
@@ -395,11 +386,8 @@ fn tilemap_grayscale() {
 #[test]
 fn tileset_export() {
     let f = load_test_file("tileset");
-    let tileset = f
-        .tilesets()
-        .get(tileset::TilesetId::from_raw(0))
-        .expect("No tileset found");
-    let img = f.tileset_image(tileset.id()).unwrap();
+    let tileset = f.tilesets().get(0).expect("No tileset found");
+    let img = tileset.image();
 
     compare_with_reference_image(img, "tileset");
 }
@@ -407,10 +395,7 @@ fn tileset_export() {
 #[test]
 fn tileset_export_single() {
     let f = load_test_file("tileset");
-    let tileset = f
-        .tilesets()
-        .get(tileset::TilesetId::from_raw(0))
-        .expect("No tileset found");
+    let tileset = f.tilesets().get(0).expect("No tileset found");
 
     let img = tileset.tile_image(1);
 

@@ -42,9 +42,9 @@ impl Grayscale {
 pub(crate) struct Indexed(pub(crate) u8);
 
 impl Indexed {
-    pub(crate) fn value(&self) -> u8 {
-        self.0
-    }
+    // pub(crate) fn value(&self) -> u8 {
+    //     self.0
+    // }
 
     pub(crate) fn as_rgba(
         &self,
@@ -139,13 +139,13 @@ impl RawPixels {
             .and_then(|bytes| Self::from_bytes(bytes, pixel_format))
     }
 
-    pub(crate) fn byte_count(&self) -> usize {
-        match self {
-            RawPixels::Rgba(v) => v.len() * 4,
-            RawPixels::Grayscale(v) => v.len() * 2,
-            RawPixels::Indexed(v) => v.len(),
-        }
-    }
+    // pub(crate) fn byte_count(&self) -> usize {
+    //     match self {
+    //         RawPixels::Rgba(v) => v.len() * 4,
+    //         RawPixels::Grayscale(v) => v.len() * 2,
+    //         RawPixels::Indexed(v) => v.len(),
+    //     }
+    // }
 
     pub(crate) fn validate(
         self,

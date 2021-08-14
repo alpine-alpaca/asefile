@@ -11,18 +11,18 @@ use crate::{external_file::ExternalFileId, reader::AseReader};
 
 /// An id for a [Tileset].
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
-pub struct TilesetId(pub(crate) u32);
+pub(crate) struct TilesetId(pub(crate) u32);
 
 impl TilesetId {
     /// Create a new `TilesetId` from a raw `u32` value.
-    pub fn from_raw(value: u32) -> Self {
+    pub(crate) fn from_raw(value: u32) -> Self {
         Self(value)
     }
 
-    /// Get the underlying `u32` value.
-    pub fn value(&self) -> u32 {
-        self.0
-    }
+    // Get the underlying `u32` value.
+    // pub(crate) fn value(&self) -> u32 {
+    //     self.0
+    // }
 }
 
 impl fmt::Display for TilesetId {
@@ -50,7 +50,7 @@ bitflags! {
 #[derive(Debug, Clone)]
 pub struct ExternalTilesetReference {
     external_file_id: ExternalFileId,
-    tileset_id: TilesetId,
+    tileset_id: u32,
 }
 
 impl ExternalTilesetReference {
@@ -60,14 +60,14 @@ impl ExternalTilesetReference {
     }
 
     /// The id of the [Tileset] in the [crate::ExternalFile].
-    pub fn tileset_id(&self) -> TilesetId {
+    pub fn tileset_id(&self) -> u32 {
         self.tileset_id
     }
 
     fn parse<T: Read>(reader: &mut AseReader<T>) -> Result<Self> {
         Ok(ExternalTilesetReference {
             external_file_id: reader.dword().map(ExternalFileId::new)?,
-            tileset_id: reader.dword().map(TilesetId)?,
+            tileset_id: reader.dword()?,
         })
     }
 }
@@ -104,7 +104,7 @@ impl TileSize {
 /// for details.
 #[derive(Debug)]
 pub struct Tileset<P = Pixels> {
-    pub(crate) id: TilesetId,
+    pub(crate) id: u32,
     pub(crate) empty_tile_is_id_zero: bool,
     pub(crate) tile_count: u32,
     pub(crate) tile_size: TileSize,
@@ -116,7 +116,7 @@ pub struct Tileset<P = Pixels> {
 
 impl<P> Tileset<P> {
     /// Tileset id.
-    pub fn id(&self) -> TilesetId {
+    pub fn id(&self) -> u32 {
         self.id
     }
 
@@ -160,7 +160,7 @@ impl Tileset<RawPixels> {
         pixel_format: PixelFormat,
     ) -> Result<Tileset<RawPixels>> {
         let mut reader = AseReader::new(data);
-        let id = reader.dword().map(TilesetId)?;
+        let id = reader.dword()?;
         let flags = reader.dword().map(|val| TilesetFlags { bits: val })?;
         let empty_tile_is_id_zero = flags.contains(TilesetFlags::EMPTY_TILE_IS_ID_ZERO);
         let tile_count = reader.dword()?;
@@ -224,8 +224,11 @@ impl Tileset<Pixels> {
         RgbaImage::from_raw(width, height, raw).expect("Mismatched image size")
     }
 
-    // Collect all tiles into one long vertical image.
-    pub(crate) fn image(&self) -> RgbaImage {
+    /// Collect all tiles into one long vertical image.
+    ///
+    /// The image has width equal to the tile width and height equal to
+    /// `tile_height * tile_count`.
+    pub fn image(&self) -> RgbaImage {
         let width = self.tile_size.width() as u32;
         let tile_height = self.tile_size.height() as u32;
         let image_height = tile_height * self.tile_count;
@@ -251,17 +254,22 @@ impl<P> TilesetsById<P> {
     }
 
     pub(crate) fn add(&mut self, tileset: Tileset<P>) {
-        self.0.insert(tileset.id(), tileset);
+        self.0.insert(TilesetId::from_raw(tileset.id), tileset);
     }
 
-    /// Returns a reference to the underlying HashMap value.
-    pub fn map(&self) -> &HashMap<TilesetId, Tileset<P>> {
-        &self.0
+    /// Number of entries.
+    pub fn len(&self) -> u32 {
+        self.0.len() as u32
     }
 
-    /// Get a reference to a [Tileset] from a [TilesetId], if the entry exists.
-    pub fn get(&self, id: TilesetId) -> Option<&Tileset<P>> {
-        self.0.get(&id)
+    // /// Returns a reference to the underlying HashMap value.
+    // pub(crate) fn map(&self) -> &HashMap<TilesetId, Tileset<P>> {
+    //     &self.0
+    // }
+
+    /// Get a reference to a [Tileset] from an id, if the entry exists.
+    pub fn get(&self, id: u32) -> Option<&Tileset<P>> {
+        self.0.get(&TilesetId::from_raw(id))
     }
 }
 
@@ -309,9 +317,9 @@ impl TilesetsById<RawPixels> {
 #[derive(Debug, Clone)]
 pub enum TilesetImageError {
     /// No tileset was found for the given id.
-    MissingTilesetId(TilesetId),
+    MissingTilesetId(u32),
     /// No pixel data contained in the tileset with the given id.
-    NoPixelsInTileset(TilesetId),
+    NoPixelsInTileset(u32),
 }
 
 impl fmt::Display for TilesetImageError {

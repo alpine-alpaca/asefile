@@ -14,7 +14,7 @@ use crate::{
     slice::Slice,
     tile::TileId,
     tilemap::Tilemap,
-    tileset::{TileSize, Tileset, TilesetImageError, TilesetsById},
+    tileset::{TileSize, Tileset, TilesetsById},
     user_data::UserData,
 };
 use crate::{cel::Cel, *};
@@ -222,21 +222,6 @@ impl AsepriteFile {
     /// Access the file's [Tileset]s.
     pub fn tilesets(&self) -> &TilesetsById {
         &self.tilesets
-    }
-
-    /// Construct the image of each tile in the [Tileset].
-    ///
-    /// The image has width equal to the tile width and height equal to
-    /// `tile_height * tile_count`.
-    pub fn tileset_image(
-        &self,
-        tileset_id: TilesetId,
-    ) -> std::result::Result<RgbaImage, TilesetImageError> {
-        let tileset = self
-            .tilesets
-            .get(tileset_id)
-            .ok_or_else(|| TilesetImageError::MissingTilesetId(tileset_id))?;
-        Ok(tileset.image())
     }
 
     /// The user data for the entire sprite, if any exists.

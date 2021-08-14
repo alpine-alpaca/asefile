@@ -1,7 +1,7 @@
 use crate::{
     cel::{Cel, CelId},
     reader::AseReader,
-    tileset::{TilesetId, TilesetsById},
+    tileset::TilesetsById,
     user_data::UserData,
     AsepriteFile, AsepriteParseError, Result,
 };
@@ -19,7 +19,7 @@ pub enum LayerType {
     /// A tilemap layer. Contains the index of the tileset used for the tiles.
     ///
     /// In Aseprite these are represented by a grid icon.
-    Tilemap(TilesetId),
+    Tilemap(u32),
 }
 
 bitflags! {
@@ -163,7 +163,7 @@ impl LayersData {
                 tilesets.get(id).ok_or_else(|| {
                     AsepriteParseError::InvalidInput(format!(
                         "Tilemap layer references a missing tileset (id {}",
-                        id.0
+                        id
                     ))
                 })?;
             }
@@ -255,10 +255,7 @@ fn parse_layer_type<R: Read>(id: u16, reader: &mut AseReader<R>) -> Result<Layer
     match id {
         0 => Ok(LayerType::Image),
         1 => Ok(LayerType::Group),
-        2 => reader
-            .dword()
-            .map(TilesetId::from_raw)
-            .map(LayerType::Tilemap),
+        2 => reader.dword().map(LayerType::Tilemap),
         _ => Err(AsepriteParseError::InvalidInput(format!(
             "Invalid layer type: {}",
             id

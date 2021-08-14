@@ -92,6 +92,48 @@ let cel2 = ase.frame(0).layer(0);
 let image = cel1.image();
 ```
 
+## Tilesets
+
+Since Aseprite 1.3 you can also create tilesets and tilemaps layers.
+
+You access each tile separately, or export them all as one image which is one
+tile wide.
+
+```
+# use asefile::AsepriteFile;
+# use std::path::Path;
+# use image::RgbaImage;
+# let path = Path::new("./tests/data/tileset.aseprite");
+# let ase = AsepriteFile::read_file(&path).unwrap();
+
+let num_tilesets = ase.tilesets().len();
+let tileset = ase.tilesets().get(0).unwrap();
+
+let all_tiles: RgbaImage = tileset.image();
+let single_tile: RgbaImage = tileset.tile_image(1);
+// Note: tile 0 is usually the empty tile
+assert_eq!(
+    all_tiles.dimensions().0,
+    tileset.tile_size().width() as u32
+);
+assert_eq!(
+    all_tiles.dimensions().1,
+    tileset.tile_size().height() as u32 * tileset.tile_count()
+)
+```
+
+## Tilemaps
+
+Aseprite also supports tilemaps which are layers that are composed entirely out
+of tiles from a tileset.
+
+You can export those layers as a single large image or you can do some custom
+processing by looking at the tile indexes in the layer.
+
+```
+// todo!()
+```
+
 */
 
 pub(crate) mod blend;
@@ -126,7 +168,5 @@ pub use layer::{BlendMode, Layer, LayerFlags};
 pub use palette::{ColorPalette, ColorPaletteEntry};
 pub use slice::{Slice, Slice9, SliceKey, SliceOrigin, SlicePivot, SliceSize};
 pub use tags::{AnimationDirection, Tag};
-pub use tileset::{
-    ExternalTilesetReference, TileSize, Tileset, TilesetId, TilesetImageError, TilesetsById,
-};
+pub use tileset::{ExternalTilesetReference, TileSize, Tileset, TilesetImageError, TilesetsById};
 pub use user_data::UserData;
