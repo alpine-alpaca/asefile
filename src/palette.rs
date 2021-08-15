@@ -5,7 +5,7 @@ use nohash::IntMap;
 #[derive(Debug)]
 pub struct ColorPalette {
     //entries: Vec<ColorPaletteEntry>,
-    entries: IntMap<u32, ColorPaletteEntry>,
+    pub(crate) entries: IntMap<u32, ColorPaletteEntry>,
 }
 
 /// A single entry in a [ColorPalette].
@@ -29,6 +29,20 @@ impl ColorPalette {
     /// this constraint using the Aseprite GUI.
     pub fn color(&self, index: u32) -> Option<&ColorPaletteEntry> {
         self.entries.get(&index)
+    }
+
+    pub(crate) fn validate_indexed_pixels(&self, indexed_pixels: &[u8]) -> Result<()> {
+        // TODO: Make way more efficient at least for the common case where
+        // the palette goes from `0..num_colors`. Just search for a value >=
+        // num_colors. Maybe make palette an enum and discover dense format
+        // after parsing.
+        for pixel in indexed_pixels {
+            let color = self.color(*pixel as u32);
+            color.ok_or_else(|| {
+                AsepriteParseError::InvalidInput(format!("Palette index invalid: {}", pixel,))
+            })?;
+        }
+        Ok(())
     }
 }
 
@@ -70,7 +84,7 @@ impl ColorPaletteEntry {
     }
 }
 
-pub(crate) fn parse_palette_chunk(data: &[u8]) -> Result<ColorPalette> {
+pub(crate) fn parse_chunk(data: &[u8]) -> Result<ColorPalette> {
     let mut reader = AseReader::new(data);
 
     let _num_total_entries = reader.dword()?;

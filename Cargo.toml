@@ -1,6 +1,6 @@
 [package]
 name = "asefile"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Alponso <alpine.alpaca.games@gmail.com>"]
 edition = "2018"
 license = "MIT"
@@ -16,6 +16,11 @@ include = [
     "LICENSE",
     "src/*"
 ]
+
+[features]
+default = []
+# Enable the util module
+utils = []
 
 [dependencies]
 byteorder = "1.3"

@@ -1,7 +1,8 @@
 use crate::{
-    cel::Cel,
+    cel::{Cel, CelId},
     reader::AseReader,
-    tileset::{TilesetId, TilesetsById},
+    tileset::TilesetsById,
+    user_data::UserData,
     AsepriteFile, AsepriteParseError, Result,
 };
 use bitflags::bitflags;
@@ -15,9 +16,10 @@ pub enum LayerType {
     /// A layer that groups other layers and does not contain any image data.
     /// In Aseprite these are represented by a folder icon.
     Group,
-    /// A tilemap layer. Contains the tileset index.
+    /// A tilemap layer. Contains the index of the tileset used for the tiles.
+    ///
     /// In Aseprite these are represented by a grid icon.
-    Tilemap(TilesetId),
+    Tilemap(u32),
 }
 
 bitflags! {
@@ -89,6 +91,14 @@ impl<'a> Layer<'a> {
         self.data().layer_type
     }
 
+    /// Is this a tilemap layer?
+    pub fn is_tilemap(&self) -> bool {
+        match self.layer_type() {
+            LayerType::Tilemap(_) => true,
+            _ => false,
+        }
+    }
+
     /// The parent of this layer, if any. For layers that are part of a group
     /// this returns the parent layer.
     ///
@@ -112,11 +122,19 @@ impl<'a> Layer<'a> {
     /// Get a reference to the Cel for this frame in the layer.
     pub fn frame(&self, frame_id: u32) -> Cel {
         assert!(frame_id < self.file.num_frames());
+        let cel_id = CelId {
+            frame: frame_id as u16,
+            layer: self.layer_id as u16,
+        };
         Cel {
             file: self.file,
-            layer: self.layer_id as u32,
-            frame: frame_id,
+            cel_id,
         }
+    }
+
+    /// Returns a reference to the layer's [UserData], if any exists.
+    pub fn user_data(&self) -> Option<&UserData> {
+        self.data().user_data.as_ref()
     }
 }
 
@@ -127,6 +145,7 @@ pub struct LayerData {
     pub(crate) blend_mode: BlendMode,
     pub(crate) opacity: u8,
     pub(crate) layer_type: LayerType,
+    pub(crate) user_data: Option<UserData>,
     child_level: u16,
 }
 
@@ -137,26 +156,33 @@ impl LayerData {
 }
 
 #[derive(Debug)]
-pub struct LayersData {
+pub(crate) struct LayersData {
     // Sorted back to front (or bottom to top in the GUI, but groups occur
     // before their children, i.e., lower index)
     pub(crate) layers: Vec<LayerData>,
     parents: Vec<Option<u32>>,
 }
+
 impl LayersData {
     pub(crate) fn validate(&self, tilesets: &TilesetsById) -> Result<()> {
         for l in &self.layers {
             if let LayerType::Tilemap(id) = l.layer_type {
                 // Validate that all Tilemap layers reference an existing Tileset.
-                tilesets.get(&id).ok_or_else(|| {
+                tilesets.get(id).ok_or_else(|| {
                     AsepriteParseError::InvalidInput(format!(
                         "Tilemap layer references a missing tileset (id {}",
-                        id.0
+                        id
                     ))
                 })?;
             }
         }
         Ok(())
+    }
+
+    pub(crate) fn from_vec(layers: Vec<LayerData>) -> Result<Self> {
+        // TODO: Validate some properties
+        let parents = compute_parents(&layers);
+        Ok(LayersData { layers, parents })
     }
 }
 
@@ -198,8 +224,8 @@ pub enum BlendMode {
     Divide,
 }
 
-pub(crate) fn parse_layer_chunk(data: &[u8]) -> Result<LayerData> {
-    let mut reader = AseReader::new(data);
+pub(crate) fn parse_chunk(data: &[u8]) -> Result<LayerData> {
+    let mut reader = AseReader::new(&data);
 
     let flags = reader.word()?;
     let layer_type = reader.word()?;
@@ -229,6 +255,7 @@ pub(crate) fn parse_layer_chunk(data: &[u8]) -> Result<LayerData> {
         opacity,
         layer_type,
         child_level,
+        user_data: None,
     })
 }
 
@@ -236,7 +263,7 @@ fn parse_layer_type<R: Read>(id: u16, reader: &mut AseReader<R>) -> Result<Layer
     match id {
         0 => Ok(LayerType::Image),
         1 => Ok(LayerType::Group),
-        2 => reader.dword().map(TilesetId::new).map(LayerType::Tilemap),
+        2 => reader.dword().map(LayerType::Tilemap),
         _ => Err(AsepriteParseError::InvalidInput(format!(
             "Invalid layer type: {}",
             id
@@ -293,10 +320,4 @@ fn compute_parents(layers: &[LayerData]) -> Vec<Option<u32>> {
         result.push(parent);
     }
     result
-}
-
-pub(crate) fn collect_layers(layers: Vec<LayerData>) -> Result<LayersData> {
-    // TODO: Validate some properties
-    let parents = compute_parents(&layers);
-    Ok(LayersData { layers, parents })
 }

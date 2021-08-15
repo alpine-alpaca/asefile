@@ -14,7 +14,7 @@ pub enum ColorProfileType {
     ICC,
 }
 
-pub(crate) fn parse_color_profile(data: &[u8]) -> Result<ColorProfile> {
+pub(crate) fn parse_chunk(data: &[u8]) -> Result<ColorProfile> {
     let mut reader = AseReader::new(data);
     let profile_type = reader.word()?;
     let flags = reader.word()?;

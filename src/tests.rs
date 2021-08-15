@@ -1,3 +1,5 @@
+use image::Pixel;
+
 use crate::*;
 use std::path::PathBuf;
 
@@ -22,9 +24,13 @@ fn compare_with_reference_image(img: image::RgbaImage, filename: &str) {
     actual_path.push(format!("{}.actual.png", filename));
     let ref_image = image::open(&reference_path).unwrap();
     let ref_rgba = ref_image.to_rgba8();
+    // println!("Loaded reference image: {}", reference_path.display());
 
+    // dbg!(img.dimensions(), ref_rgba.dimensions());
     assert_eq!(img.dimensions(), ref_rgba.dimensions());
+    // println!("saving image");
     img.save(&actual_path).unwrap();
+    // println!("done saving");
 
     for (x, y, expected_color) in ref_rgba.enumerate_pixels() {
         let actual_color = img.get_pixel(x, y);
@@ -49,6 +55,16 @@ fn compare_with_reference_image(img: image::RgbaImage, filename: &str) {
 fn is_transparent(col: &image::Rgba<u8>) -> bool {
     col.0[3] == 0
 }
+
+fn test_user_data(s: &str, c: [u8; 4]) -> UserData {
+    UserData {
+        text: Some(s.to_string()),
+        color: Some(image::Rgba::from_channels(c[0], c[1], c[2], c[3])),
+    }
+}
+
+const COLOR_GREEN: [u8; 4] = [0, 255, 0, 255];
+const COLOR_RED: [u8; 4] = [255, 0, 0, 255];
 
 #[test]
 fn basic() {
@@ -291,7 +307,7 @@ fn single_layer() {
     assert_eq!(f.num_layers(), 6);
     assert_eq!(f.layer_by_name("Layer 1").map(|l| l.id()), Some(1));
 
-    compare_with_reference_image(f.layer_image(2, 1), "single_layer");
+    compare_with_reference_image(f.frame(2).layer(1).image(), "single_layer");
 }
 
 #[test]
@@ -317,6 +333,14 @@ fn indexed() {
 }
 
 #[test]
+fn grayscale() {
+    let f = load_test_file("grayscale");
+    assert_eq!(f.size(), (64, 64));
+
+    compare_with_reference_image(f.frame(0).image(), "grayscale");
+}
+
+#[test]
 fn palette() {
     let f = load_test_file("palette");
 
@@ -327,31 +351,181 @@ fn palette() {
 }
 
 #[test]
-fn tileset() {
-    let f = load_test_file("tileset");
+fn tilemap() {
+    let f = load_test_file("tilemap");
     let img = f.frame(0).image();
     assert_eq!(f.size(), (32, 32));
-    let ts = f
-        .tilesets()
-        .get(&tileset::TilesetId::new(0))
-        .expect("No tileset found");
+    let ts = f.tilesets().get(0).expect("No tileset found");
     assert_eq!(ts.name(), "test_tileset");
+
+    compare_with_reference_image(img, "tilemap");
+}
+
+#[test]
+fn tilemap_indexed() {
+    let f = load_test_file("tilemap_indexed");
+    let img = f.frame(0).image();
+    assert_eq!(f.size(), (32, 32));
+    let ts = f.tilesets().get(0).expect("No tileset found");
+    assert_eq!(ts.name(), "test_tileset");
+
+    compare_with_reference_image(img, "tilemap_indexed");
+}
+
+#[test]
+fn tilemap_grayscale() {
+    let f = load_test_file("tilemap_grayscale");
+    let img = f.frame(0).image();
+    assert_eq!(f.size(), (32, 32));
+    let ts = f.tilesets().get(0).expect("No tileset found");
+    assert_eq!(ts.name(), "test_tileset");
+
+    compare_with_reference_image(img, "tilemap_grayscale");
+}
+
+#[test]
+fn tileset_export() {
+    let f = load_test_file("tileset");
+    let tileset = f.tilesets().get(0).expect("No tileset found");
+    let img = tileset.image();
 
     compare_with_reference_image(img, "tileset");
 }
 
 #[test]
-fn tileset_indexed() {
-    let f = load_test_file("tileset_indexed");
-    let img = f.frame(0).image();
-    assert_eq!(f.size(), (32, 32));
-    let ts = &f
-        .tilesets()
-        .get(&tileset::TilesetId::new(0))
-        .expect("No tileset found");
-    assert_eq!(ts.name(), "test_tileset");
+fn tileset_export_single() {
+    let f = load_test_file("tileset");
+    let tileset = f.tilesets().get(0).expect("No tileset found");
 
-    compare_with_reference_image(img, "tileset_indexed");
+    let img = tileset.tile_image(1);
+
+    compare_with_reference_image(img, "tileset_1");
+}
+
+#[test]
+fn tileset_multi() {
+    let f = load_test_file("tilemap_multi");
+    //let tileset = f.tilesets().get(0).expect("No tileset found");
+    let img = f.frame(0).image();
+    compare_with_reference_image(img, "tilemap_multi");
+
+    let tilemap = f.layer_by_name("Tilemap 1").unwrap();
+    let img = tilemap.frame(0).image();
+    compare_with_reference_image(img, "tilemap_multi_map1");
+
+    let tilemap = f.layer_by_name("Tilemap 2").unwrap();
+    let img = tilemap.frame(0).image();
+    compare_with_reference_image(img, "tilemap_multi_map2");
+}
+
+#[test]
+fn tileset_single_tile() {
+    let f = load_test_file("tilemap_multi");
+    let map_layer = f.layer_by_name("Tilemap 1").unwrap().id();
+    let tilemap = f.tilemap(map_layer, 0).unwrap();
+
+    dbg!(tilemap.tile_offsets());
+    assert_eq!(tilemap.width(), 13);
+    assert_eq!(tilemap.height(), 16);
+
+    assert_eq!(tilemap.tile(0, 0).id(), 0);
+    assert_eq!(tilemap.tile(0, 2).id(), 4);
+    assert_eq!(tilemap.tile(0, 3).id(), 2);
+    assert_eq!(tilemap.tile(11, 5).id(), 3);
+    assert_eq!(tilemap.tile(12, 15).id(), 0);
+    assert_eq!(tilemap.tile(4, 7).id(), 3);
+
+    let img = tilemap.tileset().tile_image(3);
+    compare_with_reference_image(img, "tilemap_single_tile_1");
+}
+
+#[test]
+fn user_data_sprite() {
+    let f = load_test_file("user_data");
+    let user_data = f.sprite_user_data().unwrap();
+    let expected = test_user_data("test_user_data_sprite", COLOR_GREEN);
+    assert_eq!(*user_data, expected);
+}
+
+#[test]
+fn user_data_layer() {
+    let f = load_test_file("user_data");
+    let layer = f.layer(0);
+    let user_data = layer.user_data().unwrap();
+    let expected = test_user_data("test_user_data_layer", COLOR_RED);
+    assert_eq!(*user_data, expected);
+}
+
+#[test]
+fn user_data_cel() {
+    let f = load_test_file("user_data");
+    let raw_cel = f.framedata.cel(cel::CelId { frame: 0, layer: 0 }).unwrap();
+    let user_data = raw_cel.user_data.as_ref().unwrap();
+    let expected = test_user_data("test_user_data_cel", COLOR_GREEN);
+    assert_eq!(*user_data, expected);
+}
+
+#[test]
+fn user_data_tags() {
+    let f = load_test_file("user_data");
+    let tags = f.tags;
+    let first = tags.get(0).and_then(|t| t.user_data()).unwrap();
+    let second = tags.get(1).and_then(|t| t.user_data()).unwrap();
+    let third = tags.get(2).and_then(|t| t.user_data()).unwrap();
+
+    let expected_first = test_user_data("test_user_data_tag_0", COLOR_GREEN);
+    assert_eq!(*first, expected_first);
+
+    let expected_second = UserData {
+        text: None,
+        color: Some(image::Rgba::from_channels(0, 0, 0, 255)),
+    };
+    assert_eq!(*second, expected_second);
+
+    let expected_third = test_user_data("test_user_data_tag_2", COLOR_RED);
+    assert_eq!(*third, expected_third);
+}
+
+#[test]
+fn cel_overflow() {
+    let file = load_test_file("cel_overflow");
+    let frame = file.frame(0);
+    let img = frame.image();
+    assert_eq!(file.width as u32, img.width());
+    assert_eq!(file.height as u32, img.height());
+}
+
+#[cfg(feature = "utils")]
+#[test]
+fn extrude_border() {
+    use crate::util::extrude_border;
+    let f = load_test_file("util_extrude");
+    let img = f.frame(0).image();
+    let img = extrude_border(img);
+    compare_with_reference_image(img, "util_extrude");
+}
+
+#[cfg(feature = "utils")]
+#[test]
+fn compute_indexed() {
+    use crate::util;
+    let f = load_test_file("util_indexed");
+    let img = f.frame(0).image();
+    let palette = f.palette().unwrap();
+    let mapper = util::PaletteMapper::new(
+        palette,
+        util::MappingOptions {
+            transparent: f.transparent_color_index(),
+            failure: 0,
+        },
+    );
+    let ((w, h), data) = util::to_indexed_image(img, &mapper);
+    assert_eq!((w, h), (4, 4));
+    assert_eq!(data.len(), 4 * 4);
+    assert_eq!(data[0], 8);
+    assert_eq!(data[1], 0);
+    assert_eq!(data[5], 11);
+    assert_eq!(data[7], 13);
 }
 
 /*

@@ -1,9 +1,17 @@
 use crate::{reader::AseReader, Result};
+use image::Pixel;
 
-#[derive(Debug)]
+/// User-provided metadata which can be attached to various items.
+///
+/// Aseprite allows attaching user data to several entities, both via the GUI
+/// and via extensions. For an example see the discussion
+/// [How to associate data to each cel](https://community.aseprite.org/t/how-to-associate-data-to-each-cel-frame/6307).
+#[derive(Debug, Clone, PartialEq)]
 pub struct UserData {
+    /// User-provided string data.
     pub text: Option<String>,
-    pub color: Option<[u8; 4]>,
+    /// User-provided color.
+    pub color: Option<image::Rgba<u8>>,
 }
 
 pub(crate) fn parse_userdata_chunk(data: &[u8]) -> Result<UserData> {
@@ -21,7 +29,8 @@ pub(crate) fn parse_userdata_chunk(data: &[u8]) -> Result<UserData> {
         let green = reader.byte()?;
         let blue = reader.byte()?;
         let alpha = reader.byte()?;
-        Some([red, green, blue, alpha])
+        let rgba = image::Rgba::from_channels(red, green, blue, alpha);
+        Some(rgba)
     } else {
         None
     };

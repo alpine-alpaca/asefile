@@ -1,48 +1,159 @@
+use crate::cel::CelId;
 use crate::external_file::{ExternalFile, ExternalFilesById};
+use crate::layer::{LayerData, LayersData};
+use crate::pixel::{Pixels, RawPixels};
 use crate::reader::AseReader;
+use crate::slice::Slice;
 use crate::tileset::{Tileset, TilesetsById};
+use crate::user_data::UserData;
 use crate::{error::AsepriteParseError, AsepriteFile, PixelFormat};
 use log::debug;
 use std::io::Read;
+use std::sync::Arc;
 
 use crate::Result;
 use crate::{cel, color_profile, layer, palette, slice, tags, user_data, Tag};
 
 struct ParseInfo {
-    palette: Option<palette::ColorPalette>,
+    palette: Option<Arc<palette::ColorPalette>>,
     color_profile: Option<color_profile::ColorProfile>,
-    layers: Option<layer::LayersData>,
-    framedata: cel::CelsData, // Vec<Vec<cel::RawCel>>,
+    layers: Vec<LayerData>,
+    framedata: cel::CelsData<RawPixels>, // Vec<Vec<cel::RawCel>>,
     frame_times: Vec<u16>,
     tags: Option<Vec<Tag>>,
     external_files: ExternalFilesById,
-    tilesets: TilesetsById,
+    tilesets: TilesetsById<RawPixels>,
+    sprite_user_data: Option<UserData>,
+    user_data_context: Option<UserDataContext>,
+    slices: Vec<Slice>,
 }
 
 impl ParseInfo {
-    fn add_cel(&mut self, frame_id: u16, cel: cel::RawCel) -> Result<()> {
-        self.framedata.add_cel(frame_id, cel)
-        // let idx = frame_id as usize;
-        // self.framedata[idx].push(cel);
+    fn new(num_frames: u16, default_frame_time: u16) -> Self {
+        Self {
+            palette: None,
+            color_profile: None,
+            layers: Vec::new(),
+            framedata: cel::CelsData::new(num_frames as u32),
+            frame_times: vec![default_frame_time; num_frames as usize],
+            tags: None,
+            external_files: ExternalFilesById::new(),
+            tilesets: TilesetsById::new(),
+            sprite_user_data: None,
+            user_data_context: None,
+            slices: Vec::new(),
+        }
     }
+
+    fn add_cel(&mut self, frame_id: u16, cel: cel::RawCel<RawPixels>) -> Result<()> {
+        let cel_id = CelId {
+            frame: frame_id,
+            layer: cel.data.layer_index,
+        };
+        self.framedata.add_cel(frame_id, cel)?;
+        self.user_data_context = Some(UserDataContext::CelId(cel_id));
+        Ok(())
+    }
+
+    fn add_layer(&mut self, layer_data: LayerData) {
+        let idx = self.layers.len();
+        self.layers.push(layer_data);
+        self.user_data_context = Some(UserDataContext::LayerIndex(idx as u32));
+    }
+
+    fn add_tags(&mut self, tags: Vec<Tag>) {
+        self.tags = Some(tags);
+        self.user_data_context = Some(UserDataContext::TagIndex(0));
+    }
+
     fn add_external_files(&mut self, files: Vec<ExternalFile>) {
         for external_file in files {
             self.external_files.add(external_file);
         }
     }
+
+    fn set_tag_user_data(&mut self, user_data: UserData, tag_index: u16) -> Result<()> {
+        let tags = self.tags.as_mut().ok_or_else(|| {
+            AsepriteParseError::InternalError(
+                "No tags data found when resolving Tags chunk context".into(),
+            )
+        })?;
+        let tag = tags.get_mut(tag_index as usize).ok_or_else(|| {
+            AsepriteParseError::InternalError(format!(
+                "Invalid tag index stored in chunk context: {}",
+                tag_index
+            ))
+        })?;
+        tag.set_user_data(user_data);
+        self.user_data_context = Some(UserDataContext::TagIndex(tag_index + 1));
+        Ok(())
+    }
+
+    fn add_user_data(&mut self, user_data: UserData) -> Result<()> {
+        let user_data_context = self.user_data_context.ok_or_else(|| {
+            AsepriteParseError::InvalidInput(
+                "Found dangling user data chunk. Expected a previous chunk to attach user data"
+                    .into(),
+            )
+        })?;
+        match user_data_context {
+            UserDataContext::CelId(cel_id) => {
+                let cel = self.framedata.cel_mut(&cel_id).ok_or_else(|| {
+                    AsepriteParseError::InternalError(format!(
+                        "Invalid cel id stored in chunk context: {}",
+                        cel_id
+                    ))
+                })?;
+                cel.user_data = Some(user_data);
+            }
+            UserDataContext::LayerIndex(layer_index) => {
+                let layer = self.layers.get_mut(layer_index as usize).ok_or_else(|| {
+                    AsepriteParseError::InternalError(format!(
+                        "Invalid layer id stored in chunk context: {}",
+                        layer_index
+                    ))
+                })?;
+                layer.user_data = Some(user_data);
+            }
+            UserDataContext::OldPalette => {
+                self.sprite_user_data = Some(user_data);
+            }
+            UserDataContext::TagIndex(tag_index) => {
+                self.set_tag_user_data(user_data, tag_index)?;
+            }
+            UserDataContext::SliceIndex(slice_idx) => {
+                let slice = self.slices.get_mut(slice_idx as usize).ok_or_else(|| {
+                    AsepriteParseError::InternalError(format!(
+                        "Invalid slice index stored in chunk context: {}",
+                        slice_idx
+                    ))
+                })?;
+                slice.user_data = Some(user_data);
+            }
+        }
+        Ok(())
+    }
+
+    fn add_slice(&mut self, slice: Slice) {
+        let context_idx = self.slices.len();
+        self.slices.push(slice);
+        self.user_data_context = Some(UserDataContext::SliceIndex(context_idx as u32));
+    }
+
     // Validate moves the ParseInfo data into an intermediate ValidatedParseInfo struct,
     // which is then used to create the AsepriteFile.
     fn validate(self, pixel_format: &PixelFormat) -> Result<ValidatedParseInfo> {
-        let layers = self
-            .layers
-            .ok_or_else(|| AsepriteParseError::InvalidInput("No layers found".to_owned()))?;
+        let layers = LayersData::from_vec(self.layers)?;
+
         let tilesets = self.tilesets;
         let palette = self.palette;
-        tilesets.validate(pixel_format, &palette)?;
+        let tilesets = tilesets.validate(pixel_format, palette.clone())?;
         layers.validate(&tilesets)?;
 
-        let framedata = self.framedata;
-        framedata.validate(&layers)?;
+        //let framedata = self.framedata;
+        let framedata = self
+            .framedata
+            .validate(&layers, pixel_format, palette.clone())?;
 
         Ok(ValidatedParseInfo {
             layers,
@@ -52,6 +163,8 @@ impl ParseInfo {
             palette,
             tags: self.tags.unwrap_or_default(),
             frame_times: self.frame_times,
+            sprite_user_data: self.sprite_user_data,
+            slices: self.slices,
         })
     }
 }
@@ -59,11 +172,13 @@ impl ParseInfo {
 struct ValidatedParseInfo {
     layers: layer::LayersData,
     tilesets: TilesetsById,
-    framedata: cel::CelsData,
+    framedata: cel::CelsData<Pixels>,
     external_files: ExternalFilesById,
-    palette: Option<palette::ColorPalette>,
+    palette: Option<Arc<palette::ColorPalette>>,
     tags: Vec<Tag>,
     frame_times: Vec<u16>,
+    sprite_user_data: Option<UserData>,
+    slices: Vec<Slice>,
 }
 
 // file format docs: https://github.com/aseprite/aseprite/blob/master/docs/ase-file-specs.md
@@ -105,54 +220,13 @@ pub fn read_aseprite<R: Read>(input: R) -> Result<AsepriteFile> {
         ));
     }
 
-    let framedata = cel::CelsData::new(num_frames as u32);
-
-    let mut parse_info = ParseInfo {
-        palette: None,
-        color_profile: None,
-        layers: None,
-        framedata,
-        frame_times: vec![default_frame_time; num_frames as usize],
-        tags: None,
-        external_files: ExternalFilesById::new(),
-        tilesets: TilesetsById::new(),
-    };
+    let mut parse_info = ParseInfo::new(num_frames, default_frame_time);
 
     let pixel_format = parse_pixel_format(color_depth, transparent_color_index)?;
 
     for frame_id in 0..num_frames {
         // println!("--- Frame {} -------", frame_id);
         parse_frame(&mut reader, frame_id, pixel_format, &mut parse_info)?;
-    }
-
-    let layers = parse_info
-        .layers
-        .as_ref()
-        .ok_or_else(|| AsepriteParseError::InvalidInput("No layers found".to_owned()))?;
-
-    // println!("==== Layers ====\n{:#?}", layers);
-    // println!("{:#?}", parse_info.framedata);
-
-    // println!("bytes: {}, size: {}x{}", size, width, height);
-    // println!("color_depth: {}, num_colors: {}", color_depth, num_colors);
-
-    //println!("framedata: {:#?}", parse_info.framedata);
-    match pixel_format {
-        PixelFormat::Rgba => {}
-        PixelFormat::Grayscale => {}
-        PixelFormat::Indexed {
-            transparent_color_index,
-        } => {
-            if let Some(ref palette) = parse_info.palette {
-                parse_info
-                    .framedata
-                    .resolve_palette(palette, transparent_color_index, &layers)?;
-            } else {
-                return Err(AsepriteParseError::InvalidInput(
-                    "Input file uses indexed color mode but does not contain a palette".into(),
-                ));
-            }
-        }
     }
 
     let ValidatedParseInfo {
@@ -163,6 +237,8 @@ pub fn read_aseprite<R: Read>(input: R) -> Result<AsepriteFile> {
         palette,
         tags,
         frame_times,
+        sprite_user_data,
+        slices,
     } = parse_info.validate(&pixel_format)?;
 
     Ok(AsepriteFile {
@@ -177,6 +253,8 @@ pub fn read_aseprite<R: Read>(input: R) -> Result<AsepriteFile> {
         framedata,
         external_files,
         tilesets,
+        sprite_user_data,
+        slices,
     })
 }
 
@@ -207,68 +285,78 @@ fn parse_frame<R: Read>(
         new_num_chunks
     };
 
-    let mut found_layers: Vec<layer::LayerData> = Vec::new();
+    let bytes_available = num_bytes as i64 - FRAME_HEADER_SIZE;
 
-    let mut bytes_available = num_bytes as i64 - FRAME_HEADER_SIZE;
-    for _chunk in 0..num_chunks {
-        let chunk = Chunk::parse(&mut bytes_available, reader)?;
+    let chunks = Chunk::read_all(num_chunks, bytes_available, reader)?;
 
-        match chunk.chunk_type {
+    for chunk in chunks {
+        let Chunk { chunk_type, data } = chunk;
+        match chunk_type {
             ChunkType::ColorProfile => {
-                let profile = color_profile::parse_color_profile(&chunk.data)?;
+                let profile = color_profile::parse_chunk(&data)?;
                 parse_info.color_profile = Some(profile);
             }
             ChunkType::Palette => {
-                let palette = palette::parse_palette_chunk(&chunk.data)?;
-                parse_info.palette = Some(palette);
+                let palette = palette::parse_chunk(&data)?;
+                parse_info.palette = Some(Arc::new(palette));
             }
             ChunkType::Layer => {
-                let layer = layer::parse_layer_chunk(&chunk.data)?;
-                found_layers.push(layer);
+                let layer_data = layer::parse_chunk(&data)?;
+                parse_info.add_layer(layer_data);
             }
             ChunkType::Cel => {
-                let cel = cel::parse_cel_chunk(&chunk.data, pixel_format)?;
+                let cel = cel::parse_chunk(&data, pixel_format)?;
                 parse_info.add_cel(frame_id, cel)?;
             }
             ChunkType::ExternalFiles => {
-                let files = ExternalFile::parse_chunk(&chunk.data)?;
+                let files = ExternalFile::parse_chunk(&data)?;
                 parse_info.add_external_files(files);
             }
             ChunkType::Tags => {
-                let tags = tags::parse_tags_chunk(&chunk.data)?;
+                let tags = tags::parse_chunk(&data)?;
                 if frame_id == 0 {
-                    parse_info.tags = Some(tags);
+                    parse_info.add_tags(tags);
                 } else {
                     debug!("Ignoring tags outside of frame 0");
                 }
             }
             ChunkType::Slice => {
-                let _slice = slice::parse_slice_chunk(&chunk.data)?;
+                let slice = slice::parse_chunk(&data)?;
+                parse_info.add_slice(slice);
                 //println!("Slice: {:#?}", slice);
             }
             ChunkType::UserData => {
-                let _ud = user_data::parse_userdata_chunk(&chunk.data)?;
+                let user_data = user_data::parse_userdata_chunk(&data)?;
+                parse_info.add_user_data(user_data)?;
                 //println!("Userdata: {:#?}", ud);
             }
             ChunkType::OldPalette04 | ChunkType::OldPalette11 => {
-                // ignore old palette chunks
+                // An old palette chunk precedes the sprite UserData chunk.
+                // Update the chunk context to reflect the OldPalette chunk.
+                parse_info.user_data_context = Some(UserDataContext::OldPalette);
+
+                // parse_info.sprite_user_data = &data.user_data;
             }
             ChunkType::Tileset => {
-                let tileset = Tileset::parse_chunk(&chunk.data, pixel_format)?;
+                let tileset = Tileset::<RawPixels>::parse_chunk(&data, pixel_format)?;
                 parse_info.tilesets.add(tileset);
             }
             ChunkType::CelExtra | ChunkType::Mask | ChunkType::Path => {
-                debug!("Ignoring unsupported chunk type: {:?}", chunk.chunk_type);
+                debug!("Ignoring unsupported chunk type: {:?}", chunk_type);
             }
         }
     }
 
-    if frame_id == 0 {
-        let layers = layer::collect_layers(found_layers)?;
-        parse_info.layers = Some(layers);
-    }
-
     Ok(())
+}
+
+#[derive(Clone, Copy)]
+enum UserDataContext {
+    CelId(CelId),
+    LayerIndex(u32),
+    OldPalette,
+    TagIndex(u16),
+    SliceIndex(u32),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -316,12 +404,12 @@ const CHUNK_HEADER_SIZE: usize = 6;
 const FRAME_HEADER_SIZE: i64 = 16;
 
 struct Chunk {
-    data: Vec<u8>,
     chunk_type: ChunkType,
+    data: Vec<u8>,
 }
 
 impl Chunk {
-    fn parse<R: Read>(bytes_available: &mut i64, reader: &mut AseReader<R>) -> Result<Self> {
+    fn read<R: Read>(bytes_available: &mut i64, reader: &mut AseReader<R>) -> Result<Self> {
         let chunk_size = reader.dword()?;
         let chunk_type_code = reader.word()?;
         let chunk_type = parse_chunk_type(chunk_type_code)?;
@@ -332,7 +420,19 @@ impl Chunk {
         let mut data = vec![0_u8; chunk_data_bytes];
         reader.read_exact(&mut data)?;
         *bytes_available -= chunk_size as i64;
-        Ok(Chunk { data, chunk_type })
+        Ok(Chunk { chunk_type, data })
+    }
+    fn read_all<R: Read>(
+        count: u32,
+        mut bytes_available: i64,
+        reader: &mut AseReader<R>,
+    ) -> Result<Vec<Self>> {
+        let mut chunks: Vec<Chunk> = Vec::new();
+        for _idx in 0..count {
+            let chunk = Self::read(&mut bytes_available, reader)?;
+            chunks.push(chunk);
+        }
+        Ok(chunks)
     }
 }
 
