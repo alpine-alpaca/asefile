@@ -1,5 +1,13 @@
 //! Utilities not directly related to Aseprite, but useful for processing the
 //! resulting image data.
+//!
+//! This module is not available by default. To use it, you must enable the
+//! feature `utils` in your `Cargo.toml`.
+//!
+//! ```toml
+//! [dependencies]
+//! asefile = { version = "0.3", features = ["utils"] }
+//! ```
 
 use image::RgbaImage;
 use nohash::IntMap;

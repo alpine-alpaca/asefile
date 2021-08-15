@@ -495,6 +495,7 @@ fn cel_overflow() {
     assert_eq!(file.height as u32, img.height());
 }
 
+#[cfg(feature = "utils")]
 #[test]
 fn extrude_border() {
     use crate::util::extrude_border;
@@ -504,6 +505,7 @@ fn extrude_border() {
     compare_with_reference_image(img, "util_extrude");
 }
 
+#[cfg(feature = "utils")]
 #[test]
 fn compute_indexed() {
     use crate::util;

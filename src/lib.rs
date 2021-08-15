@@ -183,6 +183,7 @@ mod tile;
 mod tilemap;
 mod tileset;
 pub(crate) mod user_data;
+#[cfg(feature = "utils")]
 pub mod util;
 
 /// A specialized `Result` type for Aseprite parsing functions.
