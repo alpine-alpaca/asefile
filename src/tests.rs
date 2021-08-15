@@ -440,6 +440,38 @@ fn tileset_single_tile() {
 }
 
 #[test]
+fn slices() {
+    let f = load_test_file("slice_advanced");
+    let slices = f.slices();
+    assert_eq!(slices.len(), 2);
+    let slice_1 = &f.slices()[0];
+    assert_eq!(slice_1.name, "Slice 1");
+    assert_eq!(
+        slice_1
+            .keys
+            .iter()
+            .map(|k| k.from_frame)
+            .collect::<Vec<_>>(),
+        &[0, 1, 2, 3]
+    );
+    assert_eq!(slice_1.keys[0].pivot.unwrap().0, 4);
+    let slice_2 = &f.slices()[1];
+    assert_eq!(
+        slice_2
+            .keys
+            .iter()
+            .map(|k| k.from_frame)
+            .collect::<Vec<_>>(),
+        &[0]
+    );
+    let slice9 = slice_2.keys[0].slice9.as_ref().unwrap();
+    assert_eq!(slice9.center_x, 3);
+    assert_eq!(slice9.center_y, 3);
+    assert_eq!(slice9.center_width, 2);
+    assert_eq!(slice9.center_height, 2);
+}
+
+#[test]
 fn user_data_sprite() {
     let f = load_test_file("user_data");
     let user_data = f.sprite_user_data().unwrap();

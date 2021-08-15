@@ -4,29 +4,30 @@ use crate::{reader::AseReader, user_data::UserData, Result};
 
 /// A slice is a region of the sprite with some attributes.
 ///
-/// See [official docs on slices](https://www.aseprite.org/docs/slices/) for
+/// They are created using the slice tool and can be animated over frames. See
+/// the [official docs on slices](https://www.aseprite.org/docs/slices/) for
 /// details.
 #[derive(Debug, Clone)]
 pub struct Slice {
     /// The name of the slice. Not guaranteed to be unique.
     pub name: String,
-    /// A set of [SliceKey] structs. Together, these describe the shape and position
-    /// of a slice during animation.
+    /// A sequence of [SliceKey]s. Together, these describe the shape and
+    /// position of a slice during animation.
     pub keys: Vec<SliceKey>,
-    /// Optional [UserData] associated with this slice.
+    /// User data associated with this slice.
     pub user_data: Option<UserData>,
 }
 
 /// A devision of a [Slice] into nine regions for 9-slice scaling.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct Slice9 {
-    /// Center X position (relative to slice bounds).
+    /// X position of the center area (relative to slice bounds).
     pub center_x: i32,
-    /// Center Y position (relative to slice bounds).
+    /// Y position of the center area (relative to slice bounds).
     pub center_y: i32,
-    /// Center width.
+    /// Width of the center area.
     pub center_width: u32,
-    /// Center height.
+    /// Height of the center area.
     pub center_height: u32,
 }
 
@@ -45,86 +46,40 @@ impl Slice9 {
     }
 }
 
-/// The position of a [Slice] within the sprite.
-#[derive(Debug, Clone, Copy)]
-pub struct SliceOrigin {
-    /// A [Slice]'s x origin coordinate in the sprite.
-    pub x: i32,
-    /// A [Slice]'s y origin coordinate in the sprite.
-    pub y: i32,
-}
-
-impl SliceOrigin {
-    fn read<R: Read>(reader: &mut AseReader<R>) -> Result<Self> {
-        let x = reader.long()?;
-        let y = reader.long()?;
-        Ok(Self { x, y })
-    }
-}
-
-/// The size of a [Slice] in pixels.
-#[derive(Debug, Clone, Copy)]
-pub struct SliceSize {
-    /// Slice width. This can be 0 if this slice is hidden in the animation from
-    /// the given frame.
-    pub width: u32,
-    /// Slice height.
-    pub height: u32,
-}
-
-impl SliceSize {
-    fn read<R: Read>(reader: &mut AseReader<R>) -> Result<Self> {
-        let width = reader.dword()?;
-        let height = reader.dword()?;
-        Ok(Self { width, height })
-    }
-}
-
-/// A [Slice]'s pivot position relative to the slice's origin.
-#[derive(Debug, Clone, Copy)]
-pub struct SlicePivot {
-    /// Pivot X position (relative to the slice origin).
-    pub x: i32,
-    /// Pivot Y position (relative to the slice origin).
-    pub y: i32,
-}
-
-impl SlicePivot {
-    fn read<R: Read>(reader: &mut AseReader<R>) -> Result<Self> {
-        let x = reader.long()?;
-        let y = reader.long()?;
-        Ok(Self { x, y })
-    }
-}
-
 /// The position and shape of a [Slice], starting at a given frame.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct SliceKey {
-    /// Starting frame number for this slice key. (This slice is valid from this
-    /// frame to the end of the animation.)
+    /// Starting frame number for this slice key. This slice is valid from this
+    /// frame to the end of the animation or the next slice key.
     pub from_frame: u32,
     /// Origin of the slice.
-    pub origin: SliceOrigin,
+    pub origin: (i32, i32),
     /// Size of the slice.
-    pub size: SliceSize,
-    /// Optional 9-slicing information.
+    pub size: (u32, u32),
+    /// 9-slicing information.
     pub slice9: Option<Slice9>,
-    /// Optional pivot information.
-    pub pivot: Option<SlicePivot>,
+    /// Pivot information. Relative to the origin.
+    pub pivot: Option<(i32, i32)>,
 }
 
 impl SliceKey {
     fn read<R: Read>(reader: &mut AseReader<R>, flags: u32) -> Result<Self> {
         let from_frame = reader.dword()?;
-        let origin = SliceOrigin::read(reader)?;
-        let size = SliceSize::read(reader)?;
+        let origin_x = reader.long()?;
+        let origin_y = reader.long()?;
+        let origin = (origin_x, origin_y);
+        let slice_width = reader.dword()?;
+        let slice_height = reader.dword()?;
+        let size = (slice_width, slice_height);
         let slice9 = if flags & 1 != 0 {
             Some(Slice9::read(reader)?)
         } else {
             None
         };
         let pivot = if flags & 2 != 0 {
-            Some(SlicePivot::read(reader)?)
+            let x = reader.long()?;
+            let y = reader.long()?;
+            Some((x, y))
         } else {
             None
         };
