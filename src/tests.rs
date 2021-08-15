@@ -504,6 +504,28 @@ fn extrude_border() {
     compare_with_reference_image(img, "util_extrude");
 }
 
+#[test]
+fn compute_indexed() {
+    use crate::util;
+    let f = load_test_file("util_indexed");
+    let img = f.frame(0).image();
+    let palette = f.palette().unwrap();
+    let mapper = util::PaletteMapper::new(
+        palette,
+        util::MappingOptions {
+            transparent: f.transparent_color_index(),
+            failure: 0,
+        },
+    );
+    let ((w, h), data) = util::to_indexed_image(img, &mapper);
+    assert_eq!((w, h), (4, 4));
+    assert_eq!(data.len(), 4 * 4);
+    assert_eq!(data[0], 8);
+    assert_eq!(data[1], 0);
+    assert_eq!(data[5], 11);
+    assert_eq!(data[7], 13);
+}
+
 /*
 #[test]
 fn gen_random_pixels() {

@@ -137,6 +137,24 @@ impl AsepriteFile {
         self.palette.as_deref()
     }
 
+    /// Does this file use indexed color format.
+    pub fn is_indexed_color(&self) -> bool {
+        match self.pixel_format() {
+            PixelFormat::Indexed { .. } => true,
+            PixelFormat::Rgba | PixelFormat::Grayscale => false,
+        }
+    }
+
+    /// The color index of the transparent pixel.
+    pub fn transparent_color_index(&self) -> Option<u8> {
+        match self.pixel_format() {
+            PixelFormat::Indexed {
+                transparent_color_index,
+            } => Some(transparent_color_index),
+            PixelFormat::Rgba | PixelFormat::Grayscale => None,
+        }
+    }
+
     /// Access a layer by ID.
     ///
     /// # Panics

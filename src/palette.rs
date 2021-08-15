@@ -5,7 +5,7 @@ use nohash::IntMap;
 #[derive(Debug)]
 pub struct ColorPalette {
     //entries: Vec<ColorPaletteEntry>,
-    entries: IntMap<u32, ColorPaletteEntry>,
+    pub(crate) entries: IntMap<u32, ColorPaletteEntry>,
 }
 
 /// A single entry in a [ColorPalette].
