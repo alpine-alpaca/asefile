@@ -11,7 +11,7 @@ require you to export files to JSON. This should make it fast enough to load
 your assets when the game boots up (during development). You can also use it to
 build your own asset pipelines.
 
-[Documentation](https://docs.rs/asefile/)
+[Documentation](https://docs.rs/asefile/) | [Changelog](CHANGELOG.md)
 
 [spec]: https://github.com/aseprite/aseprite/blob/master/docs/ase-file-specs.md
 

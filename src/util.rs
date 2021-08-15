@@ -1,5 +1,5 @@
 //! Utilities not directly related to Aseprite, but useful for processing the
-//! resulting image data.
+//! resulting image data. (Requires feature `utils`.)
 //!
 //! This module is not available by default. To use it, you must enable the
 //! feature `utils` in your `Cargo.toml`.
