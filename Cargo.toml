@@ -13,6 +13,7 @@ categories = ["game-development", "multimedia::images", "rendering::data-formats
 include = [
     "Cargo.toml",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE",
     "src/*"
 ]
