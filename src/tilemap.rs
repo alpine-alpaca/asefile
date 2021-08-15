@@ -23,7 +23,7 @@ pub struct Tilemap<'a> {
 impl<'a> Tilemap<'a> {
     fn tilemap(&self) -> &TilemapData {
         if let CelContent::Tilemap(ref tilemap_data) = self.cel.raw_cel().unwrap().content {
-            &tilemap_data
+            tilemap_data
         } else {
             panic!("Tilemap cel does not contain a tilemap")
         }

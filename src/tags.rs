@@ -56,7 +56,7 @@ pub enum AnimationDirection {
 }
 
 pub(crate) fn parse_chunk(data: &[u8]) -> Result<Vec<Tag>> {
-    let mut reader = AseReader::new(&data);
+    let mut reader = AseReader::new(data);
 
     let num_tags = reader.word()?;
     reader.skip_reserved(8)?;

@@ -163,7 +163,7 @@ impl AsepriteFile {
     pub fn layer(&self, id: u32) -> Layer {
         assert!(id < self.num_layers());
         Layer {
-            file: &self,
+            file: self,
             layer_id: id,
         }
     }
@@ -264,7 +264,7 @@ impl AsepriteFile {
     /// Get the [Tilemap] at the given cel.
     ///
     /// Returns `None` if the cel is empty or if it is not a tilemap.
-    pub fn tilemap<'a>(&'a self, layer_id: u32, frame: u32) -> Option<Tilemap<'a>> {
+    pub fn tilemap(&self, layer_id: u32, frame: u32) -> Option<Tilemap> {
         if layer_id >= self.num_layers() || frame >= self.num_frames() {
             return None;
         }
@@ -520,7 +520,7 @@ fn write_tilemap_cel_to_image(
                 .tile(tile_x as u16, tile_y as u16)
                 .expect("Invalid tile index");
             let tile_id = &tile.id;
-            let tile_pixels = tile_slice(&pixels, &tile_size, tile_id);
+            let tile_pixels = tile_slice(pixels, &tile_size, tile_id);
             for pixel_y in 0..tile_height {
                 for pixel_x in 0..tile_width {
                     let pixel_idx = ((pixel_y * tile_width) + pixel_x) as usize;

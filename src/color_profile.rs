@@ -7,6 +7,7 @@ pub struct ColorProfile {
     // pub icc_profile: Option<Vec<u8>>,
 }
 
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, PartialEq)]
 pub enum ColorProfileType {
     None,

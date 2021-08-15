@@ -79,9 +79,9 @@ pub struct TileSize {
     height: u16,
 }
 
-impl Into<(u32, u32)> for TileSize {
-    fn into(self) -> (u32, u32) {
-        (self.width as u32, self.height as u32)
+impl From<TileSize> for (u32, u32) {
+    fn from(sz: TileSize) -> Self {
+        (sz.width as u32, sz.height as u32)
     }
 }
 
@@ -264,6 +264,7 @@ impl<P> TilesetsById<P> {
     }
 
     /// Number of entries.
+    #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> u32 {
         self.0.len() as u32
     }
@@ -343,8 +344,6 @@ impl fmt::Display for TilesetImageError {
 
 impl Error for TilesetImageError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            _ => None,
-        }
+        None
     }
 }

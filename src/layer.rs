@@ -93,10 +93,7 @@ impl<'a> Layer<'a> {
 
     /// Is this a tilemap layer?
     pub fn is_tilemap(&self) -> bool {
-        match self.layer_type() {
-            LayerType::Tilemap(_) => true,
-            _ => false,
-        }
+        matches!(self.layer_type(), LayerType::Tilemap(_))
     }
 
     /// The parent of this layer, if any. For layers that are part of a group
@@ -225,7 +222,7 @@ pub enum BlendMode {
 }
 
 pub(crate) fn parse_chunk(data: &[u8]) -> Result<LayerData> {
-    let mut reader = AseReader::new(&data);
+    let mut reader = AseReader::new(data);
 
     let flags = reader.word()?;
     let layer_type = reader.word()?;

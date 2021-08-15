@@ -207,7 +207,7 @@ impl RawCel<RawPixels> {
             CelContent::Raw(image_content) => {
                 let layer_is_background = layers[cel_id.layer as u32].is_background();
                 let image_content =
-                    image_content.validate(palette.clone(), pixel_format, layer_is_background)?;
+                    image_content.validate(palette, pixel_format, layer_is_background)?;
                 CelContent::Raw(image_content)
             }
             CelContent::Linked(other_frame) => {
@@ -377,10 +377,7 @@ pub(crate) enum CelContent<P> {
 
 impl<P> CelContent<P> {
     fn is_raw(&self) -> bool {
-        match self {
-            CelContent::Raw(_) => true,
-            _ => false,
-        }
+        matches!(self, CelContent::Raw(_))
     }
 }
 
@@ -435,7 +432,7 @@ fn parse_compressed_cel<R: Read>(
 }
 
 pub(crate) fn parse_chunk(data: &[u8], pixel_format: PixelFormat) -> Result<RawCel<RawPixels>> {
-    let mut reader = AseReader::new(&data);
+    let mut reader = AseReader::new(data);
     let data = CelCommon::parse(&mut reader)?;
     let cel_type = reader.word()?;
     reader.skip_reserved(7)?;

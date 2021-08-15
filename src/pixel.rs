@@ -176,9 +176,9 @@ impl RawPixels {
                         )));
                     }
                 } else {
-                    return Err(AsepriteParseError::InvalidInput(
+                    Err(AsepriteParseError::InvalidInput(
                         "Indexed colors without a palette".to_string(),
-                    ));
+                    ))
                 }
             }
         }
