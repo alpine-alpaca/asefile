@@ -494,6 +494,16 @@ fn cel_overflow() {
     assert_eq!(file.width as u32, img.width());
     assert_eq!(file.height as u32, img.height());
 }
+
+#[test]
+fn extrude_border() {
+    use crate::util::extrude_border;
+    let f = load_test_file("util_extrude");
+    let img = f.frame(0).image();
+    let img = extrude_border(img);
+    compare_with_reference_image(img, "util_extrude");
+}
+
 /*
 #[test]
 fn gen_random_pixels() {

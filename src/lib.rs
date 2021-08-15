@@ -183,6 +183,7 @@ mod tile;
 mod tilemap;
 mod tileset;
 pub(crate) mod user_data;
+pub mod util;
 
 /// A specialized `Result` type for Aseprite parsing functions.
 pub type Result<T> = std::result::Result<T, AsepriteParseError>;
