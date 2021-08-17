@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.1 - 2021-08-17
+
+This is mainly an administrative release.
+
+- Build on docs.rs with all features enabled.
+- Fix all clippy warnings.
+
 ## 0.3.0 - 2021-08-15
 
 ### Added
