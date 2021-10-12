@@ -194,7 +194,7 @@ pub use cel::Cel;
 pub use error::AsepriteParseError;
 pub use external_file::{ExternalFile, ExternalFileId, ExternalFilesById};
 pub use file::{AsepriteFile, Frame, LayersIter, PixelFormat};
-pub use layer::{BlendMode, Layer, LayerFlags};
+pub use layer::{BlendMode, Layer, LayerFlags, LayerType};
 pub use palette::{ColorPalette, ColorPaletteEntry};
 pub use slice::{Slice, Slice9, SliceKey};
 pub use tags::{AnimationDirection, Tag};
