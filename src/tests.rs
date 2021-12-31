@@ -34,9 +34,9 @@ fn compare_with_reference_image(img: image::RgbaImage, filename: &str) {
 
     for (x, y, expected_color) in ref_rgba.enumerate_pixels() {
         let actual_color = img.get_pixel(x, y);
-        if actual_color == expected_color {
-            continue;
-        } else if is_transparent(expected_color) && is_transparent(actual_color) {
+        if actual_color == expected_color
+            || (is_transparent(expected_color) && is_transparent(actual_color))
+        {
             continue;
         } else {
             println!(
@@ -123,7 +123,7 @@ fn transparency() {
 fn cels_basic() {
     use std::path::Path;
     let path = Path::new("./tests/data/basic-16x16.aseprite");
-    let ase = AsepriteFile::read_file(&path).unwrap();
+    let ase = AsepriteFile::read_file(path).unwrap();
 
     let layer0 = ase.layer(0);
     let cel1 = layer0.frame(0);

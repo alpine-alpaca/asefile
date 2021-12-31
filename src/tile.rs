@@ -10,6 +10,7 @@ pub(crate) struct TileId(pub u32);
 /// But since the GUI does not yet support those (as of v1.3-beta5) we do not
 /// yet expose these attributes.
 #[derive(Debug, Clone)]
+#[allow(unused)]
 pub struct Tile {
     pub(crate) id: TileId,
     // These are currently (Aseprite v1.3-beta5) not supported by the GUI.

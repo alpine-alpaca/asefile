@@ -684,13 +684,11 @@ fn test_set_saturation() {
                     // println!("set_saturation({:.3}, {:.3}, {:.3}, {:.3}) => ({:.3}, {:.3}, {:.3}) => sat: {:.5} (input sat: {:.5})",
                     // r, g, b, sat, r1, g1, b1, sat1, sat0);
 
-                    if !(r == g && g == b) {
-                        if (sat1 - sat).abs() > 0.00001 {
-                            panic!(
+                    if !(r == g && g == b) && (sat1 - sat).abs() > 0.00001 {
+                        panic!(
                                 "set_saturation({:.3}, {:.3}, {:.3}, {:.3}) => ({:.3}, {:.3}, {:.3}) => sat: {:.5} (input sat: {:.5})",
                                 r, g, b, sat, r1, g1, b1, sat1, sat0
                             );
-                        }
                     }
                 }
             }

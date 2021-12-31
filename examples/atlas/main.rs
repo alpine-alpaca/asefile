@@ -13,6 +13,7 @@ use image::{ImageFormat, RgbaImage};
 use rect_packer::{Config, Packer, Rect};
 use std::path::Path;
 
+#[allow(unused)]
 #[derive(Debug, Clone)]
 pub struct SpriteInfo {
     name: String,
@@ -47,12 +48,9 @@ fn main() {
         for frame in 0..ase.num_frames() {
             if let Some(rect) = packer.pack(width as i32, height as i32, false) {
                 let name = format!("{}_{}", basename, frame);
-                sprites.push(SpriteInfo {
-                    name,
-                    source: rect.clone(),
-                });
+                sprites.push(SpriteInfo { name, source: rect });
                 images.push(ImageInfo {
-                    location: rect.clone(),
+                    location: rect,
                     image: ase.frame(frame).image(),
                 });
             } else {

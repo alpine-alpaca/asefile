@@ -90,6 +90,7 @@ impl<'a> Tilemap<'a> {
     }
 }
 
+#[allow(unused)]
 #[derive(Debug)]
 pub struct TilemapData {
     width: u16,
