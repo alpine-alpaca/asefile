@@ -129,16 +129,21 @@ pub(crate) fn parse_chunk(data: &[u8]) -> Result<ColorPalette> {
     Ok(ColorPalette { entries })
 }
 
-fn scale_6bit_to_8bit(color: u8) -> u8 {
-    assert!(color < 64);
-    color << 2 | color >> 4
+fn scale_6bit_to_8bit(color: u8) -> Result<u8> {
+    if color >= 64 {
+        return Err(AsepriteParseError::InvalidInput(format!(
+            "6-bit color outside range: {}",
+            color
+        )));
+    }
+
+    Ok(color << 2 | color >> 4)
 }
 
 pub(crate) fn parse_old_chunk_04(data: &[u8]) -> Result<ColorPalette> {
     let mut reader = AseReader::new(data);
 
     let packet_count = reader.word()?;
-    println!("packet count: {}", packet_count);
 
     let mut entries = IntMap::default();
     let mut skip = 0;
@@ -175,7 +180,6 @@ pub(crate) fn parse_old_chunk_11(data: &[u8]) -> Result<ColorPalette> {
     let mut reader = AseReader::new(data);
 
     let packet_count = reader.word()?;
-    println!("packet count: {}", packet_count);
 
     let mut entries = IntMap::default();
     let mut skip = 0;
@@ -190,9 +194,9 @@ pub(crate) fn parse_old_chunk_11(data: &[u8]) -> Result<ColorPalette> {
 
         count += skip;
         for id in skip..count {
-            let red = scale_6bit_to_8bit(reader.byte()?);
-            let green = scale_6bit_to_8bit(reader.byte()?);
-            let blue = scale_6bit_to_8bit(reader.byte()?);
+            let red = scale_6bit_to_8bit(reader.byte()?)?;
+            let green = scale_6bit_to_8bit(reader.byte()?)?;
+            let blue = scale_6bit_to_8bit(reader.byte()?)?;
             let id = id as u32;
             entries.insert(
                 id,
