@@ -330,12 +330,25 @@ fn parse_frame<R: Read>(
                 parse_info.add_user_data(user_data)?;
                 //println!("Userdata: {:#?}", ud);
             }
-            ChunkType::OldPalette04 | ChunkType::OldPalette11 => {
+            ChunkType::OldPalette04 => {
                 // An old palette chunk precedes the sprite UserData chunk.
                 // Update the chunk context to reflect the OldPalette chunk.
                 parse_info.user_data_context = Some(UserDataContext::OldPalette);
 
-                // parse_info.sprite_user_data = &data.user_data;
+                if parse_info.palette.is_none() {
+                    let palette = palette::parse_old_chunk_04(&data)?;
+                    parse_info.palette = Some(Arc::new(palette));
+                }
+            }
+            ChunkType::OldPalette11 => {
+                // An old palette chunk precedes the sprite UserData chunk.
+                // Update the chunk context to reflect the OldPalette chunk.
+                parse_info.user_data_context = Some(UserDataContext::OldPalette);
+
+                if parse_info.palette.is_none() {
+                    let palette = palette::parse_old_chunk_11(&data)?;
+                    parse_info.palette = Some(Arc::new(palette));
+                }
             }
             ChunkType::Tileset => {
                 let tileset = Tileset::<RawPixels>::parse_chunk(&data, pixel_format)?;

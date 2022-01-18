@@ -527,6 +527,25 @@ fn cel_overflow() {
     assert_eq!(file.height as u32, img.height());
 }
 
+#[test]
+fn old_palette_chunk_04() {
+    let f = load_test_file("256_color_old_palette_chunk");
+
+    assert_eq!(f.num_frames, 1);
+    assert_eq!((f.width, f.height), (64, 64));
+    assert_eq!(f.num_layers(), 1);
+    assert_eq!(
+        f.pixel_format,
+        PixelFormat::Indexed {
+            transparent_color_index: 0
+        }
+    );
+    assert!(f.palette().is_some());
+    assert_eq!(f.palette().unwrap().num_colors(), 256);
+
+    compare_with_reference_image(f.frame(0).image(), "256_color_old_palette_chunk");
+}
+
 #[cfg(feature = "utils")]
 #[test]
 fn extrude_border() {
