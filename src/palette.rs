@@ -128,3 +128,82 @@ pub(crate) fn parse_chunk(data: &[u8]) -> Result<ColorPalette> {
 
     Ok(ColorPalette { entries })
 }
+
+fn scale_6bit_to_8bit(color: u8) -> u8 {
+    assert!(color < 64);
+    color << 2 | color >> 4
+}
+
+pub(crate) fn parse_old_chunk_04(data: &[u8]) -> Result<ColorPalette> {
+    let mut reader = AseReader::new(data);
+
+    let packet_count = reader.word()?;
+    println!("packet count: {}", packet_count);
+
+    let mut entries = IntMap::default();
+    let mut skip = 0;
+
+    for _ in 0..packet_count {
+        skip += reader.byte()? as u32;
+        let mut count = reader.byte()? as u32;
+
+        if count == 0 {
+            count = 256;
+        }
+
+        count += skip;
+        for id in skip..count {
+            let red = reader.byte()?;
+            let green = reader.byte()?;
+            let blue = reader.byte()?;
+            let id = id as u32;
+            entries.insert(
+                id,
+                ColorPaletteEntry {
+                    id,
+                    rgba8: [red, green, blue, 255],
+                    name: None,
+                },
+            );
+        }
+    }
+
+    Ok(ColorPalette { entries })
+}
+
+pub(crate) fn parse_old_chunk_11(data: &[u8]) -> Result<ColorPalette> {
+    let mut reader = AseReader::new(data);
+
+    let packet_count = reader.word()?;
+    println!("packet count: {}", packet_count);
+
+    let mut entries = IntMap::default();
+    let mut skip = 0;
+
+    for _ in 0..packet_count {
+        skip += reader.byte()? as u32;
+        let mut count = reader.byte()? as u32;
+
+        if count == 0 {
+            count = 256;
+        }
+
+        count += skip;
+        for id in skip..count {
+            let red = scale_6bit_to_8bit(reader.byte()?);
+            let green = scale_6bit_to_8bit(reader.byte()?);
+            let blue = scale_6bit_to_8bit(reader.byte()?);
+            let id = id as u32;
+            entries.insert(
+                id,
+                ColorPaletteEntry {
+                    id,
+                    rgba8: [red, green, blue, 255],
+                    name: None,
+                },
+            );
+        }
+    }
+
+    Ok(ColorPalette { entries })
+}
