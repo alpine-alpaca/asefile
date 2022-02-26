@@ -269,10 +269,10 @@ impl<P> TilesetsById<P> {
         self.0.len() as u32
     }
 
-    // /// Returns a reference to the underlying HashMap value.
-    // pub(crate) fn map(&self) -> &HashMap<TilesetId, Tileset<P>> {
-    //     &self.0
-    // }
+    /// An iterator over all [Tileset] entries in arbitrary order.
+    pub fn iter(&self) -> impl Iterator<Item = &Tileset<P>> {
+        self.0.values()
+    }
 
     /// Get a reference to a [Tileset] from an id, if the entry exists.
     pub fn get(&self, id: u32) -> Option<&Tileset<P>> {
