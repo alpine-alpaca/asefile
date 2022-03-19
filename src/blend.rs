@@ -19,7 +19,6 @@ pub(crate) fn merge(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
     let res_r;
     let res_g;
     let res_b;
-    let res_a;
 
     if back_a == 0 {
         res_r = src_r;
@@ -34,7 +33,7 @@ pub(crate) fn merge(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
         res_g = blend8(back_g, src_g, opacity);
         res_b = blend8(back_b, src_b, opacity);
     }
-    res_a = blend8(back_a, src_a, opacity);
+    let res_a = blend8(back_a, src_a, opacity);
     if res_a == 0 {
         Rgba([0, 0, 0, 0])
     } else {

@@ -221,8 +221,8 @@ impl Tileset<Pixels> {
         let start_ofs = tile_index as usize * pixels_per_tile;
         let raw: Vec<u8> = pixels
             .clone_as_image_rgba()
-            .into_owned()
-            .into_iter()
+            .iter()
+            .copied()
             .skip(start_ofs)
             .take(pixels_per_tile)
             .flat_map(|pixel| pixel.0)
@@ -242,8 +242,8 @@ impl Tileset<Pixels> {
 
         let raw: Vec<u8> = pixels
             .clone_as_image_rgba()
-            .into_owned()
-            .into_iter()
+            .iter()
+            .copied()
             .flat_map(|pixel| pixel.0)
             .collect();
         RgbaImage::from_raw(width, image_height, raw).expect("Mismatched image size")

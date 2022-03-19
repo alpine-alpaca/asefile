@@ -21,6 +21,11 @@ include = [
 [package.metadata.docs.rs]
 all-features = true
 
+# Config for `cargo-release`, see
+# https://github.com/crate-ci/cargo-release/blob/master/docs/reference.md
+[package.metadata.release]
+dev-version = false
+
 [features]
 default = []
 # Enable the util module
