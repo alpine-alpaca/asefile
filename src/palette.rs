@@ -129,6 +129,8 @@ pub(crate) fn parse_chunk(data: &[u8]) -> Result<ColorPalette> {
     Ok(ColorPalette { entries })
 }
 
+// Note: we want to map `0 -> 0` and `63 -> 255` and evenly for the in-between
+// points so we can't simply multiply by 4.
 fn scale_6bit_to_8bit(color: u8) -> Result<u8> {
     if color >= 64 {
         return Err(AsepriteParseError::InvalidInput(format!(
@@ -137,6 +139,15 @@ fn scale_6bit_to_8bit(color: u8) -> Result<u8> {
         )));
     }
 
+    // Duplicate the top two bits of the 6-bit input into the lower 2 bits after
+    // multiplying by 4. This "leans" the number towards 0 or towards 255, based
+    // on how close we are to either of them. Examples:
+    //
+    //     000010 -> 00001000 (2  ->   8)  2/63 = 0.032,   8/255 = 0.031
+    //     011111 -> 01111101 (31 -> 125) 31/63 = 0.492, 125/255 = 0.490
+    //     100000 -> 10000010 (32 -> 130) 32/63 = 0.508, 130/255 = 0.510
+    //     111111 -> 11111111 (63 -> 255)
+    //
     Ok(color << 2 | color >> 4)
 }
 
