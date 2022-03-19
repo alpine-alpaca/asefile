@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.4 - 2021-03-19
+
+- Add support for reading old color palette chunks (Thanks to
+  [@cosmicchipsocket](https://github.com/cosmicchipsocket))
+
 ## 0.3.3 - 2021-03-19
 
 - Add `TilesetsById::iter`
