@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.3 - 2021-03-19
+
+- Add `TilesetsById::iter`
+
+## 0.3.2 - 2021-12-31
+
+- Make `LayerFlags` type public.
+- Fix new clippy warnings
+
 ## 0.3.1 - 2021-08-17
 
 This is mainly an administrative release.
