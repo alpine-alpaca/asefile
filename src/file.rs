@@ -6,7 +6,7 @@ use std::{
 };
 
 use crate::{
-    blend::{self, Color8},
+    blend::{self, mul_un8, Color8},
     cel::{CelCommon, CelId, CelsData, ImageContent, ImageSize},
     external_file::{ExternalFile, ExternalFileId, ExternalFilesById},
     layer::{Layer, LayerType, LayersData},
@@ -339,7 +339,14 @@ impl AsepriteFile {
                 let ImageContent { size, pixels } = image_content;
                 let image_pixels = pixels.clone_as_image_rgba();
 
-                write_raw_cel_to_image(image, data, size, image_pixels.as_ref(), &blend_mode);
+                write_raw_cel_to_image(
+                    image,
+                    data,
+                    size,
+                    image_pixels.as_ref(),
+                    &blend_mode,
+                    layer.opacity(),
+                );
             }
             CelContent::Tilemap(tilemap_data) => {
                 let layer_type = layer.layer_type();
@@ -367,6 +374,7 @@ impl AsepriteFile {
                     tileset,
                     rgba_pixels.as_ref(),
                     &blend_mode,
+                    layer.opacity(),
                 );
             }
             CelContent::Linked(frame) => {
@@ -498,10 +506,17 @@ fn write_tilemap_cel_to_image(
     tileset: &Tileset,
     pixels: &[Rgba<u8>],
     blend_mode: &BlendMode,
+    outer_opacity: u8,
 ) {
-    let CelCommon { x, y, opacity, .. } = cel_data;
+    let CelCommon {
+        x,
+        y,
+        opacity: cel_opacity,
+        ..
+    } = cel_data;
     let cel_x = *x as i32;
     let cel_y = *y as i32;
+    let opacity = mul_un8(outer_opacity as i32, *cel_opacity as i32);
     // tilemap dimensions
     let tilemap_width = tilemap_data.width() as i32;
     let tilemap_height = tilemap_data.height() as i32;
@@ -534,7 +549,7 @@ fn write_tilemap_cel_to_image(
                         let image_x = image_x as u32;
                         let image_y = image_y as u32;
                         let src = *image.get_pixel(image_x, image_y);
-                        let new = blend_fn(src, image_pixel, *opacity);
+                        let new = blend_fn(src, image_pixel, opacity);
                         image.put_pixel(image_x, image_y, new);
                     }
                 }
@@ -549,9 +564,16 @@ fn write_raw_cel_to_image(
     image_size: &ImageSize,
     pixels: &[Rgba<u8>],
     blend_mode: &BlendMode,
+    outer_opacity: u8,
 ) {
     let ImageSize { width, height } = image_size;
-    let CelCommon { x, y, opacity, .. } = cel_data;
+    let CelCommon {
+        x,
+        y,
+        opacity: cel_opacity,
+        ..
+    } = cel_data;
+    let opacity = mul_un8(outer_opacity as i32, *cel_opacity as i32);
     let blend_fn = blend_mode_to_blend_fn(*blend_mode);
     let x0 = *x as i32;
     let y0 = *y as i32;
@@ -570,7 +592,7 @@ fn write_raw_cel_to_image(
             let idx = (y - y0) as usize * *width as usize + (x - x0) as usize;
             let image_pixel = pixels[idx];
             let src = *image.get_pixel(x as u32, y as u32);
-            let new = blend_fn(src, image_pixel, *opacity);
+            let new = blend_fn(src, image_pixel, opacity);
             image.put_pixel(x as u32, y as u32, new);
         }
     }
