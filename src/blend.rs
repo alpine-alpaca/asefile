@@ -798,7 +798,7 @@ fn test_normal() {
     assert_eq!(Rgba([118, 162, 135, 255]), res);
 }
 
-fn mul_un8(a: i32, b: i32) -> u8 {
+pub(crate) fn mul_un8(a: i32, b: i32) -> u8 {
     let t = a * b + 0x80;
     let r = ((t >> 8) + t) >> 8;
     r as u8

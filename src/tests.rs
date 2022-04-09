@@ -112,7 +112,7 @@ fn transparency() {
 
     assert_eq!(f.num_frames(), 2);
     assert_eq!(f.size(), (16, 16));
-    assert_eq!(f.num_layers(), 2);
+    assert_eq!(f.num_layers(), 3);
     assert_eq!(f.pixel_format(), PixelFormat::Rgba);
 
     compare_with_reference_image(f.frame(0).image(), "transparency_01");
