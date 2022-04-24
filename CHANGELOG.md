@@ -1,11 +1,19 @@
 # Changelog
 
-## 0.3.4 - 2021-03-19
+## 0.3.5 - 2022-04-24
+
+Bug fixes: 
+- Fix: layer opacity was being ignored (thanks to
+  [@lucas-miranda](https://github.com/lucas-miranda),
+  [#17](https://github.com/alpine-alpaca/asefile/pull/17))
+- Fix calculation of tilemap indexes.
+
+## 0.3.4 - 2022-03-19
 
 - Add support for reading old color palette chunks (Thanks to
   [@cosmicchipsocket](https://github.com/cosmicchipsocket))
 
-## 0.3.3 - 2021-03-19
+## 0.3.3 - 2022-03-19
 
 - Add `TilesetsById::iter`
 
