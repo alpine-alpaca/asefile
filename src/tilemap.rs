@@ -73,7 +73,7 @@ impl<'a> Tilemap<'a> {
         if x < 0 || y < 0 || x >= w || y >= h {
             return &EMPTY_TILE;
         }
-        let index = (y as usize * self.width() as usize) + x as usize;
+        let index = (y as usize * w as usize) + x as usize;
         &self.tilemap().tiles[index]
     }
 

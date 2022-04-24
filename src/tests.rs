@@ -10,11 +10,10 @@ fn load_test_file(name: &str) -> AsepriteFile {
     path.push(format!("{}.aseprite", name));
     println!("Loading file: {}", path.display());
     AsepriteFile::read_file(&path).unwrap()
-    // let file = File::open(&path).unwrap();
-    // let reader = BufReader::new(file);
-    // parse::read_aseprite(reader).unwrap()
 }
 
+// Takes the `img` and saves it under `tests/data/<filename>.actual.png`. Then
+// compares it against the reference image `tests/data/<filename>.png`.
 fn compare_with_reference_image(img: image::RgbaImage, filename: &str) {
     let mut reference_path = PathBuf::new();
     reference_path.push("tests");
@@ -22,6 +21,19 @@ fn compare_with_reference_image(img: image::RgbaImage, filename: &str) {
     let mut actual_path = reference_path.clone();
     reference_path.push(format!("{}.png", filename));
     actual_path.push(format!("{}.actual.png", filename));
+
+    // If no reference image exists we still write the actual image and give the
+    // user the option to make that the reference image.
+    if !reference_path.is_file() {
+        img.save(&actual_path).unwrap();
+        panic!(
+            "No reference image found: {}\n\nTo accept the current result run `cp {:?} {:?}` (or similar)",
+            reference_path.display(),
+            actual_path.display(),
+            reference_path.display(),
+        );
+    }
+
     let ref_image = image::open(&reference_path).unwrap();
     let ref_rgba = ref_image.to_rgba8();
     // println!("Loaded reference image: {}", reference_path.display());
@@ -381,6 +393,19 @@ fn tilemap_grayscale() {
     assert_eq!(ts.name(), "test_tileset");
 
     compare_with_reference_image(img, "tilemap_grayscale");
+}
+
+#[test]
+fn tilemap_empty_edges() {
+    let f = load_test_file("tilemap_empty_edges");
+    let tilemap = f.tilemap(0, 0).unwrap();
+    assert_eq!(tilemap.tile(0, 0).id(), 1);
+    let tile_0_0_img = tilemap.tileset().tile_image(tilemap.tile(0, 0).id());
+    compare_with_reference_image(tile_0_0_img, "tilemap_empty_edges_0_0");
+
+    //assert_eq!(tilemap.tile(0, 1).id(), 4);
+    let tile_0_1_img = tilemap.tileset().tile_image(tilemap.tile(0, 1).id());
+    compare_with_reference_image(tile_0_1_img, "tilemap_empty_edges_0_1");
 }
 
 #[test]
