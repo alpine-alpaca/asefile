@@ -85,7 +85,7 @@ impl PixelFormat {
 impl AsepriteFile {
     /// Load Aseprite file. Loads full file into memory.
     pub fn read_file(path: &Path) -> Result<Self> {
-        let file = File::open(&path)?;
+        let file = File::open(path)?;
         let reader = BufReader::new(file);
         parse::read_aseprite(reader)
     }
@@ -235,6 +235,11 @@ impl AsepriteFile {
     }
 
     /// Get a reference to the tag by ID.
+    pub fn get_tag(&self, tag_id: u32) -> Option<&Tag> {
+        self.tags.get(tag_id as usize)
+    }
+
+    /// Get a reference to the tag by ID.
     ///
     /// # Panics
     ///
@@ -248,12 +253,7 @@ impl AsepriteFile {
     /// If multiple tags with the same name exist, returns the one with the
     /// lower ID.
     pub fn tag_by_name(&self, name: &str) -> Option<&Tag> {
-        for tag in &self.tags {
-            if tag.name() == name {
-                return Some(tag);
-            }
-        }
-        None
+        self.tags.iter().find(|&tag| tag.name() == name)
     }
 
     /// Access the file's [Tileset]s.

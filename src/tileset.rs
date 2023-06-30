@@ -263,10 +263,14 @@ impl<P> TilesetsById<P> {
         self.0.insert(TilesetId::from_raw(tileset.id), tileset);
     }
 
-    /// Number of entries.
-    #[allow(clippy::len_without_is_empty)]
+    /// Returns the number of entries in the tileset.
     pub fn len(&self) -> u32 {
         self.0.len() as u32
+    }
+
+    /// Returns `true` if the tileset is empty.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
 
     /// An iterator over all [Tileset] entries in arbitrary order.

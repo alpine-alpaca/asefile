@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.6 - 2023-06-30
+
+- Fix inverted `Cel::is_empty` ([#19](https://github.com/alpine-alpaca/asefile/issues/19))
+
 ## 0.3.5 - 2022-04-24
 
 Bug fixes: 

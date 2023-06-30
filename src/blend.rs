@@ -330,7 +330,7 @@ fn difference_baseline(backdrop: Color8, src: Color8, opacity: u8) -> Color8 {
 }
 
 fn blend_difference(b: i32, s: i32) -> u8 {
-    (b - s).abs() as u8
+    (b - s).unsigned_abs() as u8
 }
 
 // --- exclusion ---------------------------------------------------------------

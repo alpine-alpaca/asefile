@@ -1,6 +1,6 @@
 [package]
 name = "asefile"
-version = "0.3.5"
+version = "0.3.6"
 authors = ["alpine-alpaca <alpine.alpaca.games@gmail.com>"]
 edition = "2018"
 license = "MIT"
@@ -18,13 +18,14 @@ include = [
     "src/*"
 ]
 
+rust-version = "1.51"
+
 [package.metadata.docs.rs]
 all-features = true
 
 # Config for `cargo-release`, see
 # https://github.com/crate-ci/cargo-release/blob/master/docs/reference.md
 [package.metadata.release]
-dev-version = false
 
 [features]
 default = []

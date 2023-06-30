@@ -170,10 +170,10 @@ impl RawPixels {
                             data,
                         })
                     } else {
-                        return Err(AsepriteParseError::InvalidInput(format!(
+                        Err(AsepriteParseError::InvalidInput(format!(
                             "File pixel format ({:?}) does not match data pixel format: indexed",
                             pixel_format
-                        )));
+                        )))
                     }
                 } else {
                     Err(AsepriteParseError::InvalidInput(

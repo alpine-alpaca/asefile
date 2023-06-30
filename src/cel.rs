@@ -33,7 +33,7 @@ impl<'a> Cel<'a> {
 
     /// Returns `true` if the cel contains no data.
     pub fn is_empty(&self) -> bool {
-        self.file.framedata.cel(self.cel_id).is_some()
+        self.file.framedata.cel(self.cel_id).is_none()
     }
 
     /// The frame coordinate of this cel.
@@ -212,7 +212,7 @@ impl RawCel<RawPixels> {
             }
             CelContent::Linked(other_frame) => {
                 let ref_cel_id = CelId {
-                    frame: other_frame as u16,
+                    frame: other_frame,
                     layer: cel_id.layer,
                 };
                 validate_ref(ref_cel_id)?;
@@ -296,7 +296,7 @@ impl CelsData<RawPixels> {
                 } else {
                     None
                 };
-                result.data[frame as usize].push(cel);
+                result.data[frame].push(cel);
             }
         }
 

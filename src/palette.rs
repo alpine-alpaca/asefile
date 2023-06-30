@@ -172,7 +172,6 @@ pub(crate) fn parse_old_chunk_04(data: &[u8]) -> Result<ColorPalette> {
             let red = reader.byte()?;
             let green = reader.byte()?;
             let blue = reader.byte()?;
-            let id = id as u32;
             entries.insert(
                 id,
                 ColorPaletteEntry {
@@ -208,7 +207,6 @@ pub(crate) fn parse_old_chunk_11(data: &[u8]) -> Result<ColorPalette> {
             let red = scale_6bit_to_8bit(reader.byte()?)?;
             let green = scale_6bit_to_8bit(reader.byte()?)?;
             let blue = scale_6bit_to_8bit(reader.byte()?)?;
-            let id = id as u32;
             entries.insert(
                 id,
                 ColorPaletteEntry {
