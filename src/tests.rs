@@ -1,5 +1,3 @@
-use image::Pixel;
-
 use crate::*;
 use std::path::PathBuf;
 
@@ -71,7 +69,7 @@ fn is_transparent(col: &image::Rgba<u8>) -> bool {
 fn test_user_data(s: &str, c: [u8; 4]) -> UserData {
     UserData {
         text: Some(s.to_string()),
-        color: Some(image::Rgba::from_channels(c[0], c[1], c[2], c[3])),
+        color: Some(image::Rgba(c)),
     }
 }
 
@@ -535,7 +533,7 @@ fn user_data_tags() {
 
     let expected_second = UserData {
         text: None,
-        color: Some(image::Rgba::from_channels(0, 0, 0, 255)),
+        color: Some(image::Rgba([0, 0, 0, 255])),
     };
     assert_eq!(*second, expected_second);
 

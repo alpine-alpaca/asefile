@@ -1,4 +1,4 @@
-use image::{Pixel, Rgba};
+use image::Rgba;
 
 use crate::{reader::AseReader, AsepriteParseError, ColorPalette, PixelFormat, Result};
 use std::{borrow::Cow, io::Read, sync::Arc};
@@ -14,8 +14,8 @@ fn read_rgba(chunk: &[u8]) -> Result<Rgba<u8>> {
     let red = reader.byte()?;
     let green = reader.byte()?;
     let blue = reader.byte()?;
-    let alpha = reader.byte()?;
-    Ok(Rgba::from_channels(red, green, blue, alpha))
+    let alpha: u8 = reader.byte()?;
+    Ok(Rgba([red, green, blue, alpha]))
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -34,7 +34,7 @@ impl Grayscale {
 
     pub(crate) fn into_rgba(self) -> Rgba<u8> {
         let Self { value, alpha } = self;
-        Rgba::from_channels(value, value, value, alpha)
+        Rgba([value, value, value, alpha])
     }
 }
 
@@ -59,7 +59,7 @@ impl Indexed {
             } else {
                 c.alpha()
             };
-            Rgba::from_channels(c.red(), c.green(), c.blue(), alpha)
+            Rgba([c.red(), c.green(), c.blue(), alpha])
         })
     }
 }

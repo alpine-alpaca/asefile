@@ -72,8 +72,8 @@ fn main() {
         image::imageops::replace(
             &mut output,
             &img.image,
-            img.location.x as u32,
-            img.location.y as u32,
+            img.location.x.into(),
+            img.location.y.into(),
         );
     }
     let output_file = basedir.join("atlas.png");

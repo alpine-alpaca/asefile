@@ -1,5 +1,4 @@
 use crate::{reader::AseReader, Result};
-use image::Pixel;
 
 /// User-provided metadata which can be attached to various items.
 ///
@@ -29,7 +28,7 @@ pub(crate) fn parse_userdata_chunk(data: &[u8]) -> Result<UserData> {
         let green = reader.byte()?;
         let blue = reader.byte()?;
         let alpha = reader.byte()?;
-        let rgba = image::Rgba::from_channels(red, green, blue, alpha);
+        let rgba = image::Rgba([red, green, blue, alpha]);
         Some(rgba)
     } else {
         None
