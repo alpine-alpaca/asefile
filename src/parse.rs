@@ -214,7 +214,9 @@ pub fn read_aseprite<R: Read>(input: R) -> Result<AsepriteFile> {
     let _grid_height = reader.word()?;
     reader.skip_reserved(84)?;
 
-    if !(pixel_width == 1 && pixel_height == 1) {
+    // The Aseprite File Format Specification says that the pixel ratio is also 1:1
+    // if either the pixel width or pixel height field value is set to zero.
+    if pixel_width != 0 && pixel_height != 0 && !(pixel_width == 1 && pixel_height == 1) {
         return Err(AsepriteParseError::UnsupportedFeature(
             "Only pixel width:height ratio of 1:1 supported".to_owned(),
         ));
