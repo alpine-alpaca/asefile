@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.7 - 2023-03-03
+
+- Fix detection of pixel format for other editors (thanks to [@martinezjavier], [#22])
+- Update `image` dependency `0.23` -> `0.24` (thanks to [@gwilymk], [#20])
+
+[@gwilymk]: https://github.com/gwilymk
+[@martinezjavier]: https://github.com/martinezjavier
+[#20]: https://github.com/alpine-alpaca/asefile/pull/20
+[#22]: https://github.com/alpine-alpaca/asefile/pull/22
+
 ## 0.3.6 - 2023-06-30
 
 - Fix inverted `Cel::is_empty` ([#19](https://github.com/alpine-alpaca/asefile/issues/19))
