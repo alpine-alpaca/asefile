@@ -9,6 +9,7 @@ pub struct Tag {
     name: String,
     from_frame: u16,
     to_frame: u16,
+    repeat: u16,
     animation_direction: AnimationDirection,
     pub(crate) user_data: Option<UserData>,
 }
@@ -32,6 +33,11 @@ impl Tag {
     /// See [AnimationDirection] for details.
     pub fn animation_direction(&self) -> AnimationDirection {
         self.animation_direction
+    }
+
+    /// Repeat count included in the tag.
+    pub fn repeat(&self) -> u32 {
+        self.repeat as u32
     }
 
     /// Returns the user data for the tag, if any exists.
@@ -67,7 +73,8 @@ pub(crate) fn parse_chunk(data: &[u8]) -> Result<Vec<Tag>> {
         let from_frame = reader.word()?;
         let to_frame = reader.word()?;
         let anim_dir = reader.byte()?;
-        reader.skip_reserved(8)?;
+        let repeat = reader.word()?;
+        reader.skip_reserved(6)?;
         let _color = reader.dword()?;
         let name = reader.string()?;
         let animation_direction = parse_animation_direction(anim_dir)?;
@@ -76,6 +83,7 @@ pub(crate) fn parse_chunk(data: &[u8]) -> Result<Vec<Tag>> {
             from_frame,
             to_frame,
             animation_direction,
+            repeat,
             user_data: None,
         });
     }
