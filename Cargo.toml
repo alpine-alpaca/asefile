@@ -1,24 +1,21 @@
 [package]
 name = "asefile"
-version = "0.3.7"
+version = "0.3.6"
 authors = ["alpine-alpaca <alpine.alpaca.games@gmail.com>"]
-edition = "2018"
+edition = "2021"
 license = "MIT"
 description = "Utilities for loading Aseprite files."
 homepage = "https://github.com/alpine-alpaca/asefile"
 repository = "https://github.com/alpine-alpaca/asefile"
 readme = "README.md"
 keywords = ["gamedev", "aseprite", "pixel", "2D"]
-categories = ["game-development", "multimedia::images", "rendering::data-formats"]
-include = [
-    "Cargo.toml",
-    "README.md",
-    "CHANGELOG.md",
-    "LICENSE",
-    "src/*"
+categories = [
+    "game-development",
+    "multimedia::images",
+    "rendering::data-formats",
 ]
+include = ["Cargo.toml", "README.md", "CHANGELOG.md", "LICENSE", "src/*"]
 
-rust-version = "1.51"
 
 [package.metadata.docs.rs]
 all-features = true
@@ -36,11 +33,11 @@ utils = []
 byteorder = "1.3"
 log = "0.4"
 flate2 = "1.0"
-bitflags = "1.2"
+bitflags = "2.4.2"
 nohash = "0.2"
-image = { version = "0.24", default-features = false }
+image = { version = "0.24.8", default-features = false }
 
 [dev-dependencies]
 rand = ">=0.7, <0.9"
 rect_packer = "0.2"
-image = { version = "0.24", default-features = false, features = ["png"] }
+image = { version = "0.24.8", default-features = false, features = ["png"] }

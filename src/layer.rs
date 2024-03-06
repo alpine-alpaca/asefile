@@ -27,6 +27,7 @@ bitflags! {
     ///
     /// For checking whether a layer is visible prefer to use [Layer::is_visible]
     /// as that also takes into account any parent layer's visibility.
+    #[derive(Debug, Copy, PartialEq, Eq, Clone, PartialOrd, Ord, Hash)]
     pub struct LayerFlags: u32 {
         /// Layer is visible (eye icon is enabled).
         const VISIBLE = 0x0001;
@@ -44,7 +45,7 @@ bitflags! {
         const REFERENCE = 0x0040;
 
         /// The is a background layer.
-        const BACKGROUND_LAYER = Self::MOVEMENT_LOCKED.bits | Self::BACKGROUND.bits;
+        const BACKGROUND_LAYER = Self::MOVEMENT_LOCKED.bits() | Self::BACKGROUND.bits();
     }
 }
 
