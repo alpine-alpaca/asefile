@@ -1,3 +1,5 @@
+use std::num::NonZeroU32;
+
 use crate::{reader::AseReader, user_data::UserData, AsepriteParseError, Result};
 
 /// A tag is a grouping of one or more frames.
@@ -36,8 +38,10 @@ impl Tag {
     }
 
     /// Repeat count included in the tag.
-    pub fn repeat(&self) -> u32 {
-        self.repeat as u32
+    ///
+    /// `None` if unspecified/not enabled (UI shows infinity symbol).
+    pub fn repeat(&self) -> Option<NonZeroU32> {
+        NonZeroU32::new(self.repeat as u32)
     }
 
     /// Returns the user data for the tag, if any exists.

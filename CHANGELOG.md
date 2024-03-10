@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Parse `repeat` property of a tag. [#23]
+
+[#23]: https://github.com/alpine-alpaca/asefile/pull/23
+
 ## 0.3.7 - 2023-03-03
 
 - Fix detection of pixel format for other editors (thanks to [@martinezjavier], [#22])
