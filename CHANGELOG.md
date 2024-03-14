@@ -1,10 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.3.8
 
 - Parse `repeat` property of a tag. [#23]
+- Upgrade Rust edition and `bitflags` dependency [#24]
 
 [#23]: https://github.com/alpine-alpaca/asefile/pull/23
+[#24]: https://github.com/alpine-alpaca/asefile/pull/24
 
 ## 0.3.7 - 2023-03-03
 

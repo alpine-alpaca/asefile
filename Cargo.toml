@@ -1,6 +1,6 @@
 [package]
 name = "asefile"
-version = "0.3.7"
+version = "0.3.8"
 authors = ["alpine-alpaca <alpine.alpaca.games@gmail.com>"]
 edition = "2021"
 license = "MIT"
