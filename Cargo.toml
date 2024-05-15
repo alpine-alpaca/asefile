@@ -33,11 +33,11 @@ utils = []
 bitflags = "2"
 byteorder = "1.3"
 flate2 = "1.0"
-image = { version = "0.24", default-features = false }
+image = { version = "0.25", default-features = false }
 log = "0.4"
 nohash = "0.2"
 
 [dev-dependencies]
-image = { version = "0.24", default-features = false, features = ["png"] }
+image = { version = "0.25", default-features = false, features = ["png"] }
 rand = ">=0.7, <0.9"
 rect_packer = "0.2"
