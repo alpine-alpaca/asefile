@@ -24,3 +24,5 @@ jobs:
       run: cargo test --all-features --verbose
     - name: Run clippy
       run: cargo clippy --all-features -- -D warnings
+    - name: Test with image 0.24
+      run: cargo update -p image --precise 0.24.9 && cargo test --all-features --verbose
