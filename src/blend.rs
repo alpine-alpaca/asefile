@@ -1,5 +1,3 @@
-use std::usize;
-
 use image::Rgba;
 
 // Rust port of Aseprite's blend functions:

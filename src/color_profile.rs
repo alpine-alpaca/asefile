@@ -1,5 +1,6 @@
 use crate::{reader::AseReader, AsepriteParseError, Result};
 
+#[allow(unused)]
 #[derive(Debug)]
 pub struct ColorProfile {
     pub profile_type: ColorProfileType,
