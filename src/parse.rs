@@ -115,7 +115,7 @@ impl ParseInfo {
                 })?;
                 layer.user_data = Some(user_data);
             }
-            UserDataContext::OldPalette => {
+            UserDataContext::Palette => {
                 self.sprite_user_data = Some(user_data);
             }
             UserDataContext::TagIndex(tag_index) => {
@@ -299,6 +299,10 @@ fn parse_frame<R: Read>(
                 parse_info.color_profile = Some(profile);
             }
             ChunkType::Palette => {
+                // If the next chunk is user data, it is the sprite user data.
+                // See 3. at https://github.com/aseprite/aseprite/blob/v1.3.8/docs/ase-file-specs.md#user-data-chunk-0x2020
+                parse_info.user_data_context = Some(UserDataContext::Palette);
+
                 let palette = palette::parse_chunk(&data)?;
                 parse_info.palette = Some(Arc::new(palette));
             }
@@ -335,7 +339,7 @@ fn parse_frame<R: Read>(
             ChunkType::OldPalette04 => {
                 // An old palette chunk precedes the sprite UserData chunk.
                 // Update the chunk context to reflect the OldPalette chunk.
-                parse_info.user_data_context = Some(UserDataContext::OldPalette);
+                parse_info.user_data_context = Some(UserDataContext::Palette);
 
                 if parse_info.palette.is_none() {
                     let palette = palette::parse_old_chunk_04(&data)?;
@@ -345,7 +349,7 @@ fn parse_frame<R: Read>(
             ChunkType::OldPalette11 => {
                 // An old palette chunk precedes the sprite UserData chunk.
                 // Update the chunk context to reflect the OldPalette chunk.
-                parse_info.user_data_context = Some(UserDataContext::OldPalette);
+                parse_info.user_data_context = Some(UserDataContext::Palette);
 
                 if parse_info.palette.is_none() {
                     let palette = palette::parse_old_chunk_11(&data)?;
@@ -369,7 +373,7 @@ fn parse_frame<R: Read>(
 enum UserDataContext {
     CelId(CelId),
     LayerIndex(u32),
-    OldPalette,
+    Palette,
     TagIndex(u16),
     SliceIndex(u32),
 }
@@ -428,6 +432,7 @@ impl Chunk {
         let chunk_size = reader.dword()?;
         let chunk_type_code = reader.word()?;
         let chunk_type = parse_chunk_type(chunk_type_code)?;
+        // println!("Chunk type: {:?}", chunk_type);
 
         check_chunk_bytes(chunk_size, *bytes_available)?;
 

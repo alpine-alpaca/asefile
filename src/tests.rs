@@ -624,3 +624,17 @@ fn gen_random_pixels() {
     img.save(&Path::new("tests/data/random-256x256.png")).unwrap();
 }
 // */
+
+
+
+#[test]
+fn sprite_user_data_after_old_palette04() {
+    let ase = load_test_file("sprite_user_data_after_old_palette04");
+    assert_eq!(ase.sprite_user_data().unwrap().text.clone().unwrap(), "my custom sprite user data");
+}
+
+#[test]
+fn sprite_user_data_after_palette() {
+    let ase = load_test_file("sprite_user_data_after_palette");
+    assert_eq!(ase.sprite_user_data().unwrap().text.clone().unwrap(), "my custom sprite user data");
+}
